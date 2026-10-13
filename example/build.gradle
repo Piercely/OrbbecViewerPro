@@ -14,8 +14,7 @@ android {
     defaultConfig {
         applicationId "com.orbbec.orbbecsdkexamples"
         minSdk 24
-        //noinspection ExpiredTargetSdkVersion
-        targetSdk 27
+        targetSdk 33
         def format = new SimpleDateFormat("yyyyMMdd")
         def dataFormat = format.format(new Date())
         dataFormat+="01"//01是当天得第几版。默认是第一版

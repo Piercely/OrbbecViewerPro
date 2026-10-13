@@ -2,7 +2,6 @@ package com.orbbec.orbbecsdkexamples.activity;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import android.annotation.SuppressLint;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -21,28 +20,37 @@ import com.orbbec.obsensor.DeviceChangedCallback;
 import com.orbbec.obsensor.DeviceList;
 import com.orbbec.obsensor.Format;
 import com.orbbec.obsensor.FrameSet;
+import com.orbbec.obsensor.FrameSetCallback;
 import com.orbbec.obsensor.OBContext;
 import com.orbbec.obsensor.Pipeline;
+import com.orbbec.obsensor.Sensor;
 import com.orbbec.obsensor.SensorType;
-import com.orbbec.obsensor.StreamProfile;
 import com.orbbec.obsensor.StreamProfileList;
 import com.orbbec.obsensor.StreamType;
 import com.orbbec.obsensor.VideoStreamProfile;
 import com.orbbec.orbbecsdkexamples.R;
+import com.orbbec.orbbecsdkexamples.utils.DebugLog;
 import com.orbbec.orbbecsdkexamples.utils.ImageUtils;
+import com.orbbec.orbbecsdkexamples.utils.LocalUtils;
 import com.orbbec.orbbecsdkexamples.view.OBGLView;
 
 import java.nio.ByteBuffer;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 /**
  * SyncAlignViewer
- *
+ * <p>
+ * 对齐官方 App 的 D2C 取流方式：Pipeline 回调式开流
+ * （Config + setAlignMode + setDepthScaleRequire + Pipeline.start(config, FrameSetCallback)），
+ * 取代原先 waitForFrameSet 轮询（该方式在部分设备上取不到帧导致页面黑屏）。
+ * <p>
  * In this example, the depth map and color image mirroring status may be inconsistent because the
  * depth or color sensor does not support mirroring, resulting in the depth map and color map displaying
  * opposite images. If this situation is encountered, set the mirroring interface. Just keep the two
  * mirroring states consistent. In addition, the resolution obtained by some devices may not support
  * the D2C function. Therefore, the D2C function is subject to the actual supported D2C resolution.
- *
+ * <p>
  * For example: The resolution of D2C supported by DaBai DCW is 640x360, but the actual resolution obtained
  * by this example may be 640x480. In this case, the user can obtain the corresponding 640x360 resolution
  * according to the actual module situation.
@@ -51,9 +59,16 @@ public class SyncAlignViewerActivity extends AppCompatActivity implements SeekBa
     private static final String TAG = "SyncAlignViewerActivity";
 
     private OBContext mOBContext;
+    private Device mDevice;
     private Pipeline mPipeline;
-    private Thread mStreamThread;
+    private Config mConfig;
+
+    // 帧对队列：回调线程拷贝原始数据入队，消费线程解码/叠加/渲染
+    private final LinkedBlockingQueue<PairSnapshot> mFrameQueue = new LinkedBlockingQueue<>(4);
+
+    private Thread mConsumeThread;
     private volatile boolean mIsStreamRunning;
+
     private OBGLView mColorView;
     private CheckBox mSyncCb;
     private CheckBox mHardwareD2CCb;
@@ -61,15 +76,42 @@ public class SyncAlignViewerActivity extends AppCompatActivity implements SeekBa
 
     private TextView tvTransparency;
     private SeekBar sbTransparency;
-    private Device mDevice;
-    private Config mConfig;
     private float mAlpha = 0.5f;
+
+    private volatile boolean mFirstFrameLogged;
+    private volatile boolean mErrorToasted;
 
     private ByteBuffer mDepthSrcBuffer;
     private ByteBuffer mDepthDstBuffer;
 
     private ByteBuffer mColorSrcBuffer;
     private ByteBuffer mColorDstBuffer;
+
+    /**
+     * 一帧同步数据的不可变快照（深度+彩色原始数据）
+     */
+    private static final class PairSnapshot {
+        final int depthW, depthH;
+        final Format depthFormat;
+        final float depthValueScale;
+        final byte[] depthData;
+        final int colorW, colorH;
+        final Format colorFormat;
+        final byte[] colorData;
+
+        PairSnapshot(int depthW, int depthH, Format depthFormat, float depthValueScale, byte[] depthData,
+                     int colorW, int colorH, Format colorFormat, byte[] colorData) {
+            this.depthW = depthW;
+            this.depthH = depthH;
+            this.depthFormat = depthFormat;
+            this.depthValueScale = depthValueScale;
+            this.depthData = depthData;
+            this.colorW = colorW;
+            this.colorH = colorH;
+            this.colorFormat = colorFormat;
+            this.colorData = colorData;
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -82,90 +124,27 @@ public class SyncAlignViewerActivity extends AppCompatActivity implements SeekBa
     }
 
     private void initOBContext() {
-        // 1.Initialize the SDK Context and listen device changes
+        // 1. 初始化 SDK Context 并监听设备变化
         mOBContext = new OBContext(this, new DeviceChangedCallback() {
             @Override
             public void onDeviceAttach(DeviceList deviceList) {
+                DebugLog.log(TAG, "onDeviceAttach");
                 try {
                     if (null == mPipeline) {
-                        // 2.Create Device and initialize Pipeline through Device
-                        mDevice = deviceList.getDevice(0);
-
-                        if (null == mDevice.getSensor(SensorType.DEPTH)) {
-                            showToast(getString(R.string.device_not_support_depth));
-                            return;
-                        }
-
-                        if (null == mDevice.getSensor(SensorType.COLOR)) {
-                            showToast(getString(R.string.device_not_support_color));
-                            return;
-                        }
-
-                        // 3.Create Device and initialize Pipeline through Device
-                        mPipeline = new Pipeline(mDevice);
-
-                        // 4.Create Pipeline configuration
-                        mConfig = new Config();
-
-                        // 5.D2C is disabled by default
-                        mConfig.setAlignMode(AlignMode.ALIGN_D2C_DISABLE);
-
-                        // 6.Get the color stream configuration in the specified format
-                        StreamProfileList colorProfileList = mPipeline.getStreamProfileList(SensorType.COLOR);
-                        StreamProfile colorStreamProfile = getVideoStreamProfile(colorProfileList, 640, 0, Format.RGB888, 30);
-                        if (null == colorStreamProfile) {
-                            colorStreamProfile = getVideoStreamProfile(colorProfileList, 0, 0, Format.RGB888, 30);
-                        }
-                        if (null != colorProfileList) {
-                            colorProfileList.close();
-                        }
-
-                        // 8.Enable color Sensor VideoStreamProfile
-                        if (null != colorStreamProfile) {
-                            printStreamProfile(colorStreamProfile.as(StreamType.VIDEO));
-                            mConfig.enableStream(colorStreamProfile);
-                            colorStreamProfile.close();
-                        } else {
-                            Log.w(TAG, "onDeviceAttach: No target color stream profile!");
-                        }
-
-                        // 9.Get Deep Sensor VideoStreamProfile
-                        StreamProfileList depthProfileList = mPipeline.getStreamProfileList(SensorType.DEPTH);
-                        StreamProfile depthStreamProfile = getVideoStreamProfile(depthProfileList, 640, 0, Format.UNKNOWN, 30);
-                        if (null == depthStreamProfile) {
-                            depthStreamProfile = getVideoStreamProfile(depthProfileList, 0, 0, Format.UNKNOWN, 30);
-                        }
-                        if (null != depthProfileList) {
-                            depthProfileList.close();
-                        }
-
-                        // 10.Enable deep sensor VideoStreamProfile
-                        if (null != depthStreamProfile) {
-                            printStreamProfile(depthStreamProfile.as(StreamType.VIDEO));
-                            mConfig.enableStream(depthStreamProfile);
-                            depthStreamProfile.close();
-                        } else {
-                            Log.w(TAG, "onDeviceAttach: No target depth stream profile!");
-                        }
-
-                        // 11.Start pipeline
-                        mPipeline.start(mConfig);
-
-                        // 12.Create a thread to obtain Pipeline data
-                        start();
+                        startPipeline(deviceList);
                     }
-                } catch (Exception e) {
-                    e.printStackTrace();
                 } finally {
-                    // 13.Release DeviceList
-                    deviceList.close();
+                    // 释放 DeviceList
+                    try {
+                        deviceList.close();
+                    } catch (Exception ignored) {
+                    }
                 }
             }
 
             @Override
             public void onDeviceDetach(DeviceList deviceList) {
                 try {
-                    // Release DeviceList
                     deviceList.close();
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -174,26 +153,188 @@ public class SyncAlignViewerActivity extends AppCompatActivity implements SeekBa
         });
     }
 
+    /**
+     * 创建 Device/Pipeline 并以回调方式开启双流（对齐官方 genD2CStreamConfig）
+     */
+    private void startPipeline(DeviceList deviceList) {
+        try {
+            // 2. 创建 Device，检查深度/彩色传感器
+            Device device = deviceList.getDevice(0);
+            mDevice = device;
+
+            if (null == device.getSensor(SensorType.DEPTH)) {
+                showToast(getString(R.string.device_not_support_depth));
+                releaseDeviceQuietly();
+                return;
+            }
+            if (null == device.getSensor(SensorType.COLOR)) {
+                showToast(getString(R.string.device_not_support_color));
+                releaseDeviceQuietly();
+                return;
+            }
+
+            Pipeline pipeline = new Pipeline(device);
+            Config config = new Config();
+
+            // 3. D2C 默认关闭；深度缩放对齐官方设置
+            config.setAlignMode(AlignMode.ALIGN_D2C_DISABLE);
+            config.setDepthScaleRequire(true);
+
+            // 4. 从传感器真实列表选择彩色流配置（期望 640@30 RGB888）
+            VideoStreamProfile colorProfile = null;
+            StreamProfileList colorProfileList = device.getSensor(SensorType.COLOR).getStreamProfileList();
+            if (null != colorProfileList) {
+                colorProfile = LocalUtils.pickVideoProfile(colorProfileList, 640, 30, Format.RGB888);
+                colorProfileList.close();
+            }
+            if (null == colorProfile) {
+                Log.w(TAG, "startPipeline: no color stream profile!");
+                config.close();
+                pipeline.close();
+                releaseDeviceQuietly();
+                showToast("未找到可用的彩色流配置");
+                return;
+            }
+
+            // 5. 选择支持 D2C 的深度流配置（官方做法：按彩色分辨率查询 D2C 兼容列表）
+            VideoStreamProfile depthProfile = null;
+            StreamProfileList d2cDepthList = null;
+            try {
+                d2cDepthList = pipeline.getD2CDepthProfileList(colorProfile, AlignMode.ALIGN_D2C_DISABLE);
+            } catch (Exception e) {
+                Log.w(TAG, "getD2CDepthProfileList failed: " + e.getMessage());
+            }
+            if (null != d2cDepthList) {
+                depthProfile = LocalUtils.pickVideoProfile(d2cDepthList, 640, 30, Format.UNKNOWN);
+                d2cDepthList.close();
+            }
+            if (null == depthProfile) {
+                // 回退：从传感器真实列表选择
+                StreamProfileList depthProfileList = device.getSensor(SensorType.DEPTH).getStreamProfileList();
+                if (null != depthProfileList) {
+                    depthProfile = LocalUtils.pickVideoProfile(depthProfileList, 640, 30, Format.UNKNOWN);
+                    depthProfileList.close();
+                }
+            }
+            if (null == depthProfile) {
+                Log.w(TAG, "startPipeline: no depth stream profile!");
+                colorProfile.close();
+                config.close();
+                pipeline.close();
+                releaseDeviceQuietly();
+                showToast("未找到可用的深度流配置");
+                return;
+            }
+            Log.i(TAG, "color profile: " + colorProfile.getWidth() + "×" + colorProfile.getHeight()
+                    + "@" + colorProfile.getFps() + "fps " + colorProfile.getFormat()
+                    + " | depth profile: " + depthProfile.getWidth() + "×" + depthProfile.getHeight()
+                    + "@" + depthProfile.getFps() + "fps " + depthProfile.getFormat());
+
+            // 6. 使能双流配置
+            config.enableStream(colorProfile);
+            config.enableStream(depthProfile);
+            colorProfile.close();
+            depthProfile.close();
+
+            // 7. 回调方式开流；失败时明确提示（原先轮询无帧时页面永远黑屏）
+            try {
+                pipeline.start(config, mFrameSetCallback);
+            } catch (Exception e) {
+                Log.e(TAG, "start pipeline failed: " + e.getMessage(), e);
+                config.close();
+                pipeline.close();
+                releaseDeviceQuietly();
+                if (!mErrorToasted) {
+                    mErrorToasted = true;
+                    showToast("开启同步流失败: " + e.getMessage());
+                }
+                return;
+            }
+
+            // 8. 开流成功：记录 pipeline/config（供 D2C 切换与释放），启动消费线程
+            mPipeline = pipeline;
+            mConfig = config;
+            mFirstFrameLogged = false;
+            mErrorToasted = false;
+            startConsumeThread();
+            Log.i(TAG, "pipeline started with callback");
+        } catch (Exception e) {
+            Log.e(TAG, "startPipeline error: " + e.getMessage(), e);
+            releaseDeviceQuietly();
+            if (!mErrorToasted) {
+                mErrorToasted = true;
+                showToast("初始化失败: " + e.getMessage());
+            }
+        }
+    }
+
     private void showToast(String msg) {
         runOnUiThread(() -> Toast.makeText(SyncAlignViewerActivity.this, msg, Toast.LENGTH_SHORT).show());
     }
 
-    private void printStreamProfile(VideoStreamProfile vsp) {
-        Log.i(TAG, "printStreamProfile: "
-                + vsp.getWidth() + "×" + vsp.getHeight()
-                + "@" + vsp.getFps() + "fps " + vsp.getFormat());
-    }
-
-    private VideoStreamProfile getVideoStreamProfile(StreamProfileList profileList,
-                                                     int width, int height, Format format, int fps) {
-        VideoStreamProfile vsp = null;
+    /**
+     * 帧集回调（运行在 SDK 回调线程）：只拷贝深度/彩色原始数据并入队，尽快返回
+     */
+    private final FrameSetCallback mFrameSetCallback = frameSet -> {
+        DepthFrame depthFrame = null;
+        ColorFrame colorFrame = null;
         try {
-            vsp = profileList.getVideoStreamProfile(width, height, format, fps);
+            depthFrame = frameSet.getDepthFrame();
+            colorFrame = frameSet.getColorFrame();
+            if (null == depthFrame && null == colorFrame) {
+                return;
+            }
+
+            int depthW = 0, depthH = 0, colorW = 0, colorH = 0;
+            Format depthFormat = Format.UNKNOWN, colorFormat = Format.UNKNOWN;
+            float scale = 1.0f;
+            byte[] depthData = null, colorData = null;
+
+            if (null != depthFrame) {
+                depthW = depthFrame.getWidth();
+                depthH = depthFrame.getHeight();
+                depthFormat = depthFrame.getFormat();
+                scale = depthFrame.getValueScale();
+                depthData = new byte[depthFrame.getDataSize()];
+                depthFrame.getData(depthData);
+            }
+            if (null != colorFrame) {
+                colorW = colorFrame.getWidth();
+                colorH = colorFrame.getHeight();
+                colorFormat = colorFrame.getFormat();
+                colorData = new byte[colorFrame.getDataSize()];
+                colorFrame.getData(colorData);
+            }
+
+            PairSnapshot pair = new PairSnapshot(depthW, depthH, depthFormat, scale, depthData,
+                    colorW, colorH, colorFormat, colorData);
+            // 队列满时丢弃最旧帧，保留最新帧
+            if (!mFrameQueue.offer(pair)) {
+                mFrameQueue.poll();
+                mFrameQueue.offer(pair);
+            }
         } catch (Exception e) {
-            Log.w(TAG, "getVideoStreamProfile: " + e.getMessage());
+            Log.w(TAG, "frameset callback error: " + e);
+        } finally {
+            // 帧与帧集必须在回调内释放，否则管线会卡死
+            try {
+                if (null != depthFrame) {
+                    depthFrame.close();
+                }
+            } catch (Exception ignored) {
+            }
+            try {
+                if (null != colorFrame) {
+                    colorFrame.close();
+                }
+            } catch (Exception ignored) {
+            }
+            try {
+                frameSet.close();
+            } catch (Exception ignored) {
+            }
         }
-        return vsp;
-    }
+    };
 
     private void initView() {
         mColorView = findViewById(R.id.colorview_id);
@@ -211,36 +352,103 @@ public class SyncAlignViewerActivity extends AppCompatActivity implements SeekBa
         tvTransparency.setText(String.format("%.2f", sbTransparency.getProgress() / 100f));
     }
 
-    private void start() {
+    private void startConsumeThread() {
         mIsStreamRunning = true;
-        if (null == mStreamThread) {
-            mStreamThread = new Thread(mStreamRunnable);
-            mStreamThread.start();
+        if (null == mConsumeThread) {
+            mConsumeThread = new Thread(mConsumeRunnable, "sync-consume");
+            mConsumeThread.setUncaughtExceptionHandler((t, e) -> {
+                DebugLog.log(TAG, "consume thread crashed: " + e);
+                showToast("渲染线程崩溃: " + e);
+            });
+            mConsumeThread.start();
         }
-
     }
 
-    private void stop() {
+    private void stopConsumeThread() {
         mIsStreamRunning = false;
-        if (null != mStreamThread) {
+        if (null != mConsumeThread) {
             try {
-                mStreamThread.join(300);
+                mConsumeThread.join(300);
             } catch (InterruptedException e) {
+            }
+            mConsumeThread = null;
+        }
+    }
+
+    /**
+     * 消费线程：解码深度/彩色数据并叠加渲染
+     */
+    private final Runnable mConsumeRunnable = () -> {
+        while (mIsStreamRunning) {
+            PairSnapshot pair;
+            try {
+                pair = mFrameQueue.poll(100, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                break;
+            }
+            if (null == pair) {
+                continue;
+            }
+            try {
+                renderPair(pair);
+
+                if (!mFirstFrameLogged) {
+                    mFirstFrameLogged = true;
+                    Log.i(TAG, "first frameset: depth " + pair.depthW + "x" + pair.depthH
+                            + " " + pair.depthFormat + ", color " + pair.colorW + "x" + pair.colorH
+                            + " " + pair.colorFormat);
+                    showToast("已收到首帧画面");
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "sync render error: " + e);
+            }
+        }
+    };
+
+    /**
+     * 渲染一帧：双流都有则叠加，缺一则渲染存在的流（避免长时间黑屏）
+     */
+    private void renderPair(PairSnapshot pair) {
+        if (pair.depthData != null && pair.colorData != null) {
+            // Convert depth data to RGB888 format
+            decodeDepthFrame(pair.depthW, pair.depthH, pair.depthData, pair.depthValueScale);
+            // Convert color data to RGB888 format
+            decodeColorFrame(pair.colorW, pair.colorH, pair.colorFormat, pair.colorData);
+
+            if (mDepthDstBuffer != null && mColorDstBuffer != null) {
+                byte[] depthColorData = ImageUtils.depthAlignToColor(mColorDstBuffer, mDepthDstBuffer,
+                        pair.colorW, pair.colorH, pair.depthW, pair.depthH, mAlpha);
+                mColorView.update(pair.colorW, pair.colorH, StreamType.COLOR, Format.RGB888, depthColorData, 1.0f);
+            }
+        } else if (pair.depthData != null) {
+            decodeDepthFrame(pair.depthW, pair.depthH, pair.depthData, pair.depthValueScale);
+            if (mDepthDstBuffer != null) {
+                mDepthDstBuffer.rewind();
+                byte[] depthRgb = new byte[pair.depthW * pair.depthH * 3];
+                mDepthDstBuffer.get(depthRgb);
+                mColorView.update(pair.depthW, pair.depthH, StreamType.COLOR, Format.RGB888, depthRgb, 1.0f);
+            }
+        } else if (pair.colorData != null) {
+            decodeColorFrame(pair.colorW, pair.colorH, pair.colorFormat, pair.colorData);
+            if (mColorDstBuffer != null) {
+                mColorDstBuffer.rewind();
+                byte[] colorRgb = new byte[pair.colorW * pair.colorH * 3];
+                mColorDstBuffer.get(colorRgb);
+                mColorView.update(pair.colorW, pair.colorH, StreamType.COLOR, Format.RGB888, colorRgb, 1.0f);
             }
         }
     }
 
-    private void decodeColorFrame(ColorFrame colorFrame) {
-        if (null == colorFrame) {
+    private void decodeColorFrame(int colorW, int colorH, Format format, byte[] colorData) {
+        if (null == colorData) {
             return;
         }
-        int colorW = colorFrame.getWidth();
-        int colorH = colorFrame.getHeight();
-        if (null == mColorSrcBuffer || mColorSrcBuffer.capacity() != colorFrame.getDataSize()) {
-            mColorSrcBuffer = ByteBuffer.allocateDirect(colorFrame.getDataSize());
+        if (null == mColorSrcBuffer || mColorSrcBuffer.capacity() != colorData.length) {
+            mColorSrcBuffer = ByteBuffer.allocateDirect(colorData.length);
         }
         mColorSrcBuffer.clear();
-        colorFrame.getData(mColorSrcBuffer);
+        mColorSrcBuffer.put(colorData);
+        mColorSrcBuffer.flip();
 
         int colorDstSize = colorW * colorH * 3;
         if (null == mColorDstBuffer || mColorDstBuffer.capacity() != colorDstSize) {
@@ -248,7 +456,7 @@ public class SyncAlignViewerActivity extends AppCompatActivity implements SeekBa
         }
         mColorDstBuffer.clear();
 
-        switch (colorFrame.getFormat()) {
+        switch (format) {
             case RGB888:
                 mColorDstBuffer.put(mColorSrcBuffer);
                 mColorDstBuffer.flip();
@@ -260,23 +468,22 @@ public class SyncAlignViewerActivity extends AppCompatActivity implements SeekBa
                 ImageUtils.uyvyToRgb(mColorSrcBuffer, mColorDstBuffer, colorW, colorH);
                 break;
             default:
-                Log.w(TAG, "decodeColorFrame: unsupported format!");
+                Log.w(TAG, "decodeColorFrame: unsupported format " + format);
                 break;
         }
     }
 
-    private void decodeDepthFrame(DepthFrame depthFrame) {
-        if (null == depthFrame) {
+    private void decodeDepthFrame(int depthW, int depthH, byte[] depthData, float valueScale) {
+        if (null == depthData) {
             return;
         }
-        int depthW = depthFrame.getWidth();
-        int depthH = depthFrame.getHeight();
         // Depth frame data to RGB888
-        if (null == mDepthSrcBuffer || mDepthSrcBuffer.capacity() != depthFrame.getDataSize()) {
-            mDepthSrcBuffer = ByteBuffer.allocateDirect(depthFrame.getDataSize());
+        if (null == mDepthSrcBuffer || mDepthSrcBuffer.capacity() != depthData.length) {
+            mDepthSrcBuffer = ByteBuffer.allocateDirect(depthData.length);
         }
         mDepthSrcBuffer.clear();
-        depthFrame.getData(mDepthSrcBuffer);
+        mDepthSrcBuffer.put(depthData);
+        mDepthSrcBuffer.flip();
 
         int depthDstSize = depthW * depthH * 3;
         if (null == mDepthDstBuffer || mDepthDstBuffer.capacity() != depthDstSize) {
@@ -284,92 +491,54 @@ public class SyncAlignViewerActivity extends AppCompatActivity implements SeekBa
         }
         mDepthDstBuffer.clear();
 
-        ImageUtils.nScalePrecisionToDepthPixel(mDepthSrcBuffer, depthW, depthH, depthFrame.getDataSize(), depthFrame.getValueScale());
+        ImageUtils.nScalePrecisionToDepthPixel(mDepthSrcBuffer, depthW, depthH, depthData.length, valueScale);
         ImageUtils.depthToRgb(mDepthSrcBuffer, mDepthDstBuffer);
     }
 
-    private void depthOverlayColorProcess(DepthFrame depthFrame, ColorFrame colorFrame) {
-        if (null != depthFrame && null != colorFrame) {
-            int colorW = colorFrame.getWidth();
-            int colorH = colorFrame.getHeight();
-            int depthW = depthFrame.getWidth();
-            int depthH = depthFrame.getHeight();
-
-            // Convert depth data to RGB888 format
-            decodeDepthFrame(depthFrame);
-
-            // Convert color data to RGB888 format
-            decodeColorFrame(colorFrame);
-
-            if (mDepthDstBuffer != null && mColorDstBuffer != null) {
-                byte[] depthColorData = ImageUtils.depthAlignToColor(mColorDstBuffer, mDepthDstBuffer,
-                        colorW, colorH, depthW, depthH, mAlpha);
-                mColorView.update(colorW, colorH, StreamType.COLOR, Format.RGB888, depthColorData, 1.0f);
+    private void releaseDeviceQuietly() {
+        if (null != mDevice) {
+            try {
+                mDevice.close();
+            } catch (Exception ignored) {
             }
+            mDevice = null;
         }
     }
-
-    private Runnable mStreamRunnable = () -> {
-        while (mIsStreamRunning) {
-            try {
-                // If it cannot be obtained after waiting for 100ms, it will time out
-                FrameSet frameSet = mPipeline.waitForFrameSet(100);
-
-                if (null == frameSet) {
-                    continue;
-                }
-
-                // Get depth sensor frame
-                DepthFrame depthFrame = frameSet.getDepthFrame();
-
-                // Get color sensor frame
-                ColorFrame colorFrame = frameSet.getColorFrame();
-
-                // Depth and color overlay rendering
-                depthOverlayColorProcess(depthFrame, colorFrame);
-
-                // Release depth frame
-                if (null != depthFrame) {
-                    depthFrame.close();
-                }
-
-                // Release color frame
-                if (null != colorFrame) {
-                    colorFrame.close();
-                }
-
-                // Release FrameSet
-                frameSet.close();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-    };
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
         try {
-            // Stop getting Pipeline data
-            stop();
-
-            // Stop the Pipeline and close it
+            // 1. 先停止取流，再停止消费线程
             if (null != mPipeline) {
-                mPipeline.stop();
-                mPipeline.close();
+                try {
+                    mPipeline.stop();
+                } catch (Exception e) {
+                    Log.w(TAG, "pipeline stop failed: " + e.getMessage());
+                }
             }
+            stopConsumeThread();
 
-            // Release Config
+            // 2. 释放 Pipeline 与 Config
+            if (null != mPipeline) {
+                try {
+                    mPipeline.close();
+                } catch (Exception ignored) {
+                }
+                mPipeline = null;
+            }
             if (null != mConfig) {
-                mConfig.close();
+                try {
+                    mConfig.close();
+                } catch (Exception ignored) {
+                }
+                mConfig = null;
             }
 
-            // Release Device resource
-            if (null != mDevice) {
-                mDevice.close();
-            }
+            // 3. 释放 Device 资源
+            releaseDeviceQuietly();
 
-            // Release SDK Context
+            // 4. 释放 SDK Context
             if (null != mOBContext) {
                 mOBContext.close();
             }
@@ -395,20 +564,23 @@ public class SyncAlignViewerActivity extends AppCompatActivity implements SeekBa
     // set frame sync
     private void setSync(boolean isChecked) {
         try {
+            if (null == mPipeline) {
+                return;
+            }
             if (isChecked) {
                 mPipeline.enableFrameSync();
             } else {
                 mPipeline.disableFrameSync();
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.w(TAG, "setSync: " + e.getMessage());
         }
     }
 
     // Config D2C Align
     private void setAlignToColor(boolean isChecked, boolean isHardware) {
         try {
-            if (mPipeline == null || mDevice == null) {
+            if (mPipeline == null || mConfig == null) {
                 return;
             }
             try {
@@ -420,6 +592,7 @@ public class SyncAlignViewerActivity extends AppCompatActivity implements SeekBa
                 mPipeline.switchConfig(mConfig);
             } catch (Exception e) {
                 Log.w(TAG, "setAlignToColor: " + e.getMessage());
+                showToast("D2C 切换失败: " + e.getMessage());
             }
         } catch (Exception e) {
             e.printStackTrace();

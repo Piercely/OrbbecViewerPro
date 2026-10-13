@@ -39,6 +39,7 @@
         <activity android:name=".activity.MultiDeviceActivity" />
         <activity
             android:name=".activity.MainActivity"
+            android:exported="true"
             android:theme="@style/Theme.OrbbecViewer">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
