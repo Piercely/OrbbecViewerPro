@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/app_bg"
+    tools:context=".activity.MainActivity">
+
+    <!-- ===================== Brand header ===================== -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/bg_home_header"
+        android:fitsSystemWindows="true"
+        android:paddingStart="@dimen/sp_20"
+        android:paddingEnd="@dimen/sp_20"
+        android:paddingTop="@dimen/sp_24"
+        android:paddingBottom="@dimen/sp_24">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/home_title"
+            android:textColor="@color/text_on_dark"
+            android:textSize="@dimen/ts_display"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/sp_6"
+            android:text="@string/home_subtitle"
+            android:textColor="@color/text_on_dark_secondary"
+            android:textSize="@dimen/ts_label" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/sp_16"
+            android:background="@drawable/bg_status_chip"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="@dimen/sp_14"
+            android:paddingEnd="@dimen/sp_14"
+            android:paddingTop="@dimen/sp_6"
+            android:paddingBottom="@dimen/sp_6">
+
+            <View
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:background="@drawable/bg_dot_online" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/sp_8"
+                android:text="@string/home_sdk_chip"
+                android:textColor="@color/text_on_dark"
+                android:textSize="@dimen/ts_caption" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- ===================== Content ===================== -->
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:paddingBottom="@dimen/sp_16"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/home_side_padding"
+                android:layout_marginTop="@dimen/sp_18"
+                android:layout_marginBottom="@dimen/sp_12"
+                android:text="@string/home_section_features"
+                android:textColor="@color/text_primary"
+                android:textSize="@dimen/ts_title"
+                android:textStyle="bold" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rv_features"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipToPadding="false"
+                android:paddingStart="@dimen/home_side_padding"
+                android:paddingEnd="@dimen/home_side_padding"
+                android:overScrollMode="never"
+                android:scrollbars="none" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/home_side_padding"
+                android:layout_marginEnd="@dimen/home_side_padding"
+                android:layout_marginTop="@dimen/sp_16"
+                android:background="@drawable/bg_tip_card"
+                android:gravity="center_vertical"
+                android:minHeight="48dp"
+                android:orientation="horizontal"
+                android:padding="@dimen/sp_14">
+
+                <ImageView
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_info_tip"
+                    app:tint="@color/brand_primary" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/sp_10"
+                    android:text="@string/home_hint"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="@dimen/ts_caption" />
+            </LinearLayout>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</LinearLayout>

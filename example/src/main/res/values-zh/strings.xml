@@ -1,0 +1,91 @@
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="app_name">奥比中光相机工具</string>
+    <string name="title_activity_sensor_control_welcome">SensorControlWelcomeActivity</string>
+
+    <!-- ===================== 首页 ===================== -->
+    <string name="home_title">奥比中光相机工具</string>
+    <string name="home_subtitle">3D 视觉取流与调试工具集</string>
+    <string name="home_sdk_chip">OrbbecSDK v1.6.3</string>
+    <string name="home_hint">请连接深度相机，点击下方功能卡片开始</string>
+    <string name="home_section_features">功能列表</string>
+
+    <string name="feat_hello">设备信息</string>
+    <string name="feat_hello_desc">HelloOrbbec · 枚举设备</string>
+    <string name="feat_color">彩色画面</string>
+    <string name="feat_color_desc">RGB 相机实时预览，可拍照</string>
+    <string name="feat_depth">深度画面</string>
+    <string name="feat_depth_desc">彩虹深度图实时预览，可拍照</string>
+    <string name="feat_ir">红外画面</string>
+    <string name="feat_ir_desc">红外相机实时预览，可拍照</string>
+    <string name="feat_align">同步对齐</string>
+    <string name="feat_align_desc">深度与彩色画面对齐</string>
+    <string name="feat_pointcloud">点云</string>
+    <string name="feat_pointcloud_desc">三维点云渲染</string>
+    <string name="feat_imu">IMU 数据</string>
+    <string name="feat_imu_desc">加速度计与陀螺仪</string>
+    <string name="feat_mode">深度工作模式</string>
+    <string name="feat_mode_desc">切换深度工作模式</string>
+    <string name="feat_multi">多设备</string>
+    <string name="feat_multi_desc">多相机同时使用</string>
+    <string name="feat_control">传感器控制</string>
+    <string name="feat_control_desc">曝光、增益等参数调节</string>
+    <string name="feat_record">录制回放</string>
+    <string name="feat_record_desc">录制与回放数据流</string>
+    <string name="feat_save">数据保存</string>
+    <string name="feat_save_desc">帧数据保存到本地</string>
+    <string name="feat_hot">热插拔</string>
+    <string name="feat_hot_desc">设备插入与拔出监听</string>
+
+    <!-- ===================== 浏览页 / 拍照 ===================== -->
+    <string name="viewer_color_title">彩色画面</string>
+    <string name="viewer_depth_title">深度画面</string>
+    <string name="viewer_ir_title">红外画面</string>
+    <string name="viewer_capture_hint">点击下方快门按钮拍照保存</string>
+    <string name="viewer_back">返回</string>
+    <string name="viewer_shutter">拍照</string>
+    <string name="viewer_waiting">正在等待画面…</string>
+    <string name="photo_saved">照片已保存到相册\n%1$s</string>
+    <string name="photo_no_frame">暂无画面，请稍候…</string>
+    <string name="photo_failed">照片保存失败</string>
+    <!--
+    This string is used for square devices and overridden by hello_world in
+    values-round/strings.xml for round devices.
+    -->
+    <string name="hello_world">Hello Square World!</string>
+
+    <string name="device_info"><xliff:g>%s</xliff:g>\n
+        Name:<xliff:g>%s</xliff:g>\n
+        SN:<xliff:g>%s</xliff:g>\n
+        PID:<xliff:g>%s</xliff:g>\n
+        VID:<xliff:g>%s</xliff:g></string>
+
+    <string name="notification">Run Information See Log.</string>
+    <string name="depth_mode">深度工作模式</string>
+    <string name="sensor">相机sensor类型</string>
+    <string name="start_play">开始播放</string>
+    <string name="stop_play">停止播放</string>
+    <string name="device_name">设备名称</string>
+
+    <string name="device_not_connected">设备未连接</string>
+    <string name="device_not_support_depth_mode">本设备不支持深度工作模式</string>
+    <string name="device_not_support_color">本设备不支持Color</string>
+    <string name="device_not_support_ir">本设备不支持IR</string>
+    <string name="device_not_support_depth">本设备不支持Depth</string>
+    <string name="device_not_support_imu">本设备不支持IMU</string>
+    <string name="please_access_device">请插入设备</string>
+    <string name="sensor_control_select_device">选择设备名：</string>
+    <string name="sensor_control_select_command">选择操作指令：</string>
+    <string name="sensor_control_operate_log">操作日志：</string>
+    <string name="sensor_control_firmware_version">固件版本号：</string>
+    <string name="sensor_control_hardware_version">硬件版本：</string>
+    <string name="sensor_control_sdk_version">SDK版本号：</string>
+    <string name="sensor_control_serial_number">SN号：</string>
+    <string name="sensor_control_read_write_permission"> 读写权限：</string>
+    <string name="device_list_is_empty">设备列表为空</string>
+    <string name="command_list_is_empty">操作指令列表为空</string>
+    <string name="please_input_right_value">请按照提示输入正确的值</string>
+    <string name="cannot_set_exposure_and_gain_when_ae_on">自动曝光未关闭，不能设置曝光或增益</string>
+    <string name="cannot_set_brightness_when_ae_off">自动曝光未开启，不能设置亮度</string>
+    <string name="cannot_set_white_balance_when_auto_white_balance_on">自动白平衡未关闭，不能设置白平衡</string>
+    <string name="save_to_disk_save_path">保存路径：/sdcard/imagePng/</string>
+</resources>

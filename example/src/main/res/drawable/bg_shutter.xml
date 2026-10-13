@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#33000000">
+    <item android:id="@android:id/background">
+        <shape android:shape="oval">
+            <solid android:color="@color/shutter_disc" />
+            <stroke android:width="4dp" android:color="@color/shutter_ring" />
+        </shape>
+    </item>
+    <item android:id="@android:id/mask">
+        <shape android:shape="oval">
+            <solid android:color="@android:color/white" />
+        </shape>
+    </item>
+</ripple>

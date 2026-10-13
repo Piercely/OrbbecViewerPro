@@ -1,0 +1,41 @@
+name: Build OrbbecViewer APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Assemble release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK and CMake
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager "ndk;21.4.7075529" "cmake;3.18.1" "platforms;android-33" "build-tools;33.0.0"
+
+      - name: Build release APK
+        run: |
+          chmod +x gradlew
+          ./gradlew :example:assembleRelease --stacktrace --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: OrbbecViewer-release-apk
+          path: example/build/outputs/apk/release/*.apk
+          if-no-files-found: error

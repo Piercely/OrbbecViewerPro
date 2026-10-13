@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Legacy palette (kept for compatibility) -->
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <!-- ============ Brand (modern mainstream blue) ============ -->
+    <color name="brand_primary">#2563EB</color>
+    <color name="brand_primary_dark">#1D4ED8</color>
+    <color name="brand_primary_deep">#173B8C</color>
+    <color name="brand_primary_light">#E8F0FF</color>
+    <color name="brand_secondary">#14B8A6</color>
+    <color name="brand_accent">#FF8A3D</color>
+
+    <!-- ============ Background / Surface ============ -->
+    <color name="app_bg">#F4F6FB</color>
+    <color name="surface">#FFFFFFFF</color>
+    <color name="divider">#E6EAF2</color>
+
+    <!-- ============ Text ============ -->
+    <color name="text_primary">#172033</color>
+    <color name="text_secondary">#5B6577</color>
+    <color name="text_hint">#8A93A6</color>
+    <color name="text_on_primary">#FFFFFFFF</color>
+    <color name="text_on_dark">#F5F8FF</color>
+    <color name="text_on_dark_secondary">#B8C2D9</color>
+
+    <!-- ============ Feature icon categories ============ -->
+    <color name="cat_blue">#2563EB</color>
+    <color name="cat_blue_bg">#E8F0FF</color>
+    <color name="cat_teal">#0D9488</color>
+    <color name="cat_teal_bg">#E0F5F2</color>
+    <color name="cat_violet">#7C3AED</color>
+    <color name="cat_violet_bg">#EFE9FE</color>
+    <color name="cat_amber">#D97706</color>
+    <color name="cat_amber_bg">#FEF1E1</color>
+    <color name="cat_rose">#E11D48</color>
+    <color name="cat_rose_bg">#FFE8EE</color>
+    <color name="cat_cyan">#0891B2</color>
+    <color name="cat_cyan_bg">#DFF4FA</color>
+
+    <!-- ============ Viewer page ============ -->
+    <color name="shutter_ring">#1F2937</color>
+    <color name="shutter_disc">#FFFFFF</color>
+</resources>

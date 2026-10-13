@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+    Because the window insets on round devices are larger than 15dp, this padding only applies
+    to square devices.
+    -->
+    <dimen name="box_inset_layout_padding">0dp</dimen>
+
+    <!--
+    This padding applies to both square and round screens. The total padding between the buttons
+    and the window insets is box_inset_layout_padding (above variable) on square screens and
+    inner_frame_layout_padding (below variable) on round screens.
+    -->
+    <dimen name="inner_frame_layout_padding">5dp</dimen>
+
+    <dimen name="imu_text_size">22sp</dimen>
+    <dimen name="imu_accel_textview_width">200dip</dimen>
+    <dimen name="imu_accel_textview_height">45dip</dimen>
+    <dimen name="imu_gyro_textview_width">200dip</dimen>
+    <dimen name="imu_gyro_textview_height">45dip</dimen>
+
+    <!-- ===================== Type scale (enlarged for readability) ===================== -->
+    <dimen name="ts_display">28sp</dimen>
+    <dimen name="ts_title_large">21sp</dimen>
+    <dimen name="ts_title">19sp</dimen>
+    <dimen name="ts_body">17sp</dimen>
+    <dimen name="ts_label">16sp</dimen>
+    <dimen name="ts_caption">14sp</dimen>
+    <dimen name="ts_small">13sp</dimen>
+
+    <!-- ===================== Spacing scale ===================== -->
+    <dimen name="sp_2">2dp</dimen>
+    <dimen name="sp_4">4dp</dimen>
+    <dimen name="sp_6">6dp</dimen>
+    <dimen name="sp_8">8dp</dimen>
+    <dimen name="sp_10">10dp</dimen>
+    <dimen name="sp_12">12dp</dimen>
+    <dimen name="sp_14">14dp</dimen>
+    <dimen name="sp_16">16dp</dimen>
+    <dimen name="sp_18">18dp</dimen>
+    <dimen name="sp_20">20dp</dimen>
+    <dimen name="sp_24">24dp</dimen>
+    <dimen name="sp_28">28dp</dimen>
+    <dimen name="sp_32">32dp</dimen>
+
+    <!-- ===================== Corner radius ===================== -->
+    <dimen name="corner_s">10dp</dimen>
+    <dimen name="corner_m">14dp</dimen>
+    <dimen name="corner_l">20dp</dimen>
+    <dimen name="corner_xl">28dp</dimen>
+
+    <!-- ===================== Home page ===================== -->
+    <dimen name="home_side_padding">16dp</dimen>
+    <dimen name="home_card_radius">18dp</dimen>
+    <dimen name="home_card_elevation">2dp</dimen>
+    <dimen name="home_card_stroke">1dp</dimen>
+    <dimen name="home_icon_size">48dp</dimen>
+    <dimen name="home_icon_radius">14dp</dimen>
+    <dimen name="home_grid_space">12dp</dimen>
+
+    <!-- ===================== Viewer page ===================== -->
+    <dimen name="viewer_shutter_size">76dp</dimen>
+    <dimen name="viewer_shutter_icon">40dp</dimen>
+    <dimen name="viewer_bar_height">96dp</dimen>
+    <dimen name="viewer_touch">48dp</dimen>
+</resources>

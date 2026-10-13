@@ -1,0 +1,91 @@
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="app_name">Orbbec Camera Tools</string>
+    <string name="title_activity_sensor_control_welcome">SensorControlWelcomeActivity</string>
+
+    <!-- ===================== Home ===================== -->
+    <string name="home_title">Orbbec Camera Tools</string>
+    <string name="home_subtitle">3D vision streaming &amp; debugging toolkit</string>
+    <string name="home_sdk_chip">OrbbecSDK v1.6.3</string>
+    <string name="home_hint">Connect an Orbbec depth camera, then tap a feature card</string>
+    <string name="home_section_features">Features</string>
+
+    <string name="feat_hello">Device Info</string>
+    <string name="feat_hello_desc">HelloOrbbec · enumerate device</string>
+    <string name="feat_color">Color Stream</string>
+    <string name="feat_color_desc">RGB camera live view</string>
+    <string name="feat_depth">Depth Stream</string>
+    <string name="feat_depth_desc">Rainbow depth live view</string>
+    <string name="feat_ir">IR Stream</string>
+    <string name="feat_ir_desc">Infrared camera live view</string>
+    <string name="feat_align">Sync &amp; Align</string>
+    <string name="feat_align_desc">Depth to color alignment</string>
+    <string name="feat_pointcloud">Point Cloud</string>
+    <string name="feat_pointcloud_desc">3D point cloud rendering</string>
+    <string name="feat_imu">IMU</string>
+    <string name="feat_imu_desc">Accel &amp; gyroscope data</string>
+    <string name="feat_mode">Depth Work Mode</string>
+    <string name="feat_mode_desc">Switch depth work modes</string>
+    <string name="feat_multi">Multi Device</string>
+    <string name="feat_multi_desc">Multiple cameras together</string>
+    <string name="feat_control">Sensor Control</string>
+    <string name="feat_control_desc">Exposure, gain and more</string>
+    <string name="feat_record">Record &amp; Playback</string>
+    <string name="feat_record_desc">Record and replay streams</string>
+    <string name="feat_save">Save To Disk</string>
+    <string name="feat_save_desc">Save frames as files</string>
+    <string name="feat_hot">Hot Plug</string>
+    <string name="feat_hot_desc">Device attach / detach</string>
+
+    <!-- ===================== Viewer / capture ===================== -->
+    <string name="viewer_color_title">Color Stream</string>
+    <string name="viewer_depth_title">Depth Stream</string>
+    <string name="viewer_ir_title">IR Stream</string>
+    <string name="viewer_capture_hint">Tap the shutter to save a photo</string>
+    <string name="viewer_back">Back</string>
+    <string name="viewer_shutter">Capture photo</string>
+    <string name="viewer_waiting">Waiting for frames…</string>
+    <string name="photo_saved">Photo saved to album\n%1$s</string>
+    <string name="photo_no_frame">No frame yet, please wait…</string>
+    <string name="photo_failed">Failed to save photo</string>
+    <!--
+    This string is used for square devices and overridden by hello_world in
+    values-round/strings.xml for round devices.
+    -->
+    <string name="hello_world">Hello Square World!</string>
+
+    <string name="device_info"><xliff:g>%s</xliff:g>\n
+        Name:<xliff:g>%s</xliff:g>\n
+        SN:<xliff:g>%s</xliff:g>\n
+        PID:<xliff:g>%s</xliff:g>\n
+        VID:<xliff:g>%s</xliff:g></string>
+
+    <string name="notification">Run Information See Log.</string>
+    <string name="depth_mode">Depth work mode</string>
+    <string name="sensor">Sensor Type</string>
+    <string name="start_play">Start Play</string>
+    <string name="stop_play">Stop Play</string>
+    <string name="device_name">Device name</string>
+
+    <string name="device_not_connected">No device connected !</string>
+    <string name="device_not_support_depth_mode">Current device is not support DepthWorkMode</string>
+    <string name="device_not_support_color">This device does not support Color sensor</string>
+    <string name="device_not_support_ir">This device does not support IR sensor</string>
+    <string name="device_not_support_depth">This device does not support Depth sensor</string>
+    <string name="device_not_support_imu">This device does not support IMU</string>
+    <string name="please_access_device">Please access the device</string>
+    <string name="sensor_control_select_device">Select device: </string>
+    <string name="sensor_control_select_command">Select command: </string>
+    <string name="sensor_control_operate_log">Operate log: </string>
+    <string name="sensor_control_firmware_version">Firmware version: </string>
+    <string name="sensor_control_hardware_version">Hardware version: </string>
+    <string name="sensor_control_sdk_version">SDK version: </string>
+    <string name="sensor_control_serial_number">Serial Number: </string>
+    <string name="sensor_control_read_write_permission"> Permission：</string>
+    <string name="device_list_is_empty">Device list is empty</string>
+    <string name="command_list_is_empty">Command list is empty</string>
+    <string name="please_input_right_value">Please follow the prompts to enter the correct value</string>
+    <string name="cannot_set_exposure_and_gain_when_ae_on">Auto exposure is not turned off and exposure or gain cannot be set</string>
+    <string name="cannot_set_brightness_when_ae_off">The automatic exposure is not turned on, and the brightness cannot be set</string>
+    <string name="cannot_set_white_balance_when_auto_white_balance_on">Auto white balance is not turned off and white balance cannot be set</string>
+    <string name="save_to_disk_save_path">SavePath: /sdcard/imagePng/</string>
+</resources>

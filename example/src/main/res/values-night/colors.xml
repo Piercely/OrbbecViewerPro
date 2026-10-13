@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark mode overrides -->
+    <color name="brand_primary">#5B8CFF</color>
+    <color name="brand_primary_dark">#1D4ED8</color>
+    <color name="brand_primary_deep">#0E1A33</color>
+    <color name="brand_primary_light">#1B2A4A</color>
+
+    <color name="app_bg">#0E1524</color>
+    <color name="surface">#161F30</color>
+    <color name="divider">#26314A</color>
+
+    <color name="text_primary">#E7ECF5</color>
+    <color name="text_secondary">#A9B4C7</color>
+    <color name="text_hint">#7A849B</color>
+    <color name="text_on_primary">#FFFFFFFF</color>
+
+    <color name="cat_blue">#7FA8FF</color>
+    <color name="cat_blue_bg">#1C2B4D</color>
+    <color name="cat_teal">#4FD1C5</color>
+    <color name="cat_teal_bg">#10393A</color>
+    <color name="cat_violet">#A78BFA</color>
+    <color name="cat_violet_bg">#2A2150</color>
+    <color name="cat_amber">#FBBF24</color>
+    <color name="cat_amber_bg">#3D2C10</color>
+    <color name="cat_rose">#FB7185</color>
+    <color name="cat_rose_bg">#41192B</color>
+    <color name="cat_cyan">#38BDF8</color>
+    <color name="cat_cyan_bg">#0C3340</color>
+</resources>
