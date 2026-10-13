@@ -22,8 +22,13 @@ jobs:
 
       - name: Install NDK and CMake
         run: |
-          yes | sdkmanager --licenses >/dev/null
-          sdkmanager "ndk;21.4.7075529" "cmake;3.18.1" "platforms;android-33" "build-tools;33.0.0"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -1)
+          fi
+          echo "Using: $SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          "$SDKMANAGER" "ndk;21.4.7075529" "cmake;3.18.1" "platforms;android-33" "build-tools;33.0.0"
 
       - name: Build release APK
         run: |
