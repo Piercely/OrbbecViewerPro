@@ -136,7 +136,7 @@
         <item name="android:switchStyle">@style/Widget.App.Switch</item>
         <item name="editTextStyle">@style/Widget.App.EditText</item>
         <item name="android:editTextStyle">@style/Widget.App.EditText</item>
-        <item name="spinnerItemStyle">@style/Widget.App.SpinnerItem</item>
+        <item name="android:spinnerItemStyle">@style/Widget.App.SpinnerItem</item>
         <item name="spinnerDropDownItemStyle">@style/Widget.App.SpinnerDropDownItem</item>
         <item name="android:dropDownItemStyle">@style/Widget.App.SpinnerDropDownItem</item>
         <item name="textAppearanceListItem">@style/TextAppearance.App.ListItem</item>
@@ -167,7 +167,7 @@
         <item name="android:radioButtonStyle">@style/Widget.App.RadioButton</item>
         <item name="editTextStyle">@style/Widget.App.EditText</item>
         <item name="android:editTextStyle">@style/Widget.App.EditText</item>
-        <item name="spinnerItemStyle">@style/Widget.App.SpinnerItem</item>
+        <item name="android:spinnerItemStyle">@style/Widget.App.SpinnerItem</item>
         <item name="spinnerDropDownItemStyle">@style/Widget.App.SpinnerDropDownItem</item>
     </style>
 
