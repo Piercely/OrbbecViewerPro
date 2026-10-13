@@ -9,9 +9,7 @@
     android:foreground="?attr/selectableItemBackground"
     app:cardBackgroundColor="@color/surface"
     app:cardCornerRadius="@dimen/home_card_radius"
-    app:cardElevation="@dimen/home_card_elevation"
-    app:cardStrokeColor="@color/divider"
-    app:cardStrokeWidth="@dimen/home_card_stroke">
+    app:cardElevation="@dimen/home_card_elevation">
 
     <LinearLayout
         android:layout_width="match_parent"
