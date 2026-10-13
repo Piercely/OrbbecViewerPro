@@ -41,6 +41,8 @@ public class ColorViewerActivity extends AppCompatActivity {
     private OBGLView mColorView;
     private Device mDevice;
     private CaptureController mCaptureController;
+    private volatile boolean mFirstFrameLogged;
+    private volatile boolean mErrorToasted;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,8 +50,12 @@ public class ColorViewerActivity extends AppCompatActivity {
         setContentView(R.layout.activity_color_viewer);
         mColorView = findViewById(R.id.colorview_id);
         findViewById(R.id.btn_back).setOnClickListener(v -> finish());
-        mCaptureController = new CaptureController(this,
-                findViewById(R.id.btn_shutter), findViewById(R.id.tv_waiting), "COLOR");
+        try {
+            mCaptureController = new CaptureController(this,
+                    findViewById(R.id.btn_shutter), findViewById(R.id.tv_waiting), "COLOR");
+        } catch (Exception e) {
+            Log.e(TAG, "init capture failed: " + e.getMessage(), e);
+        }
         // 1.Initialize the SDK Context and listen device changes
         mOBContext = new OBContext(getApplicationContext(), new DeviceChangedCallback() {
             @Override
@@ -125,8 +131,14 @@ public class ColorViewerActivity extends AppCompatActivity {
 
     private void start() {
         mIsStreamRunning = true;
+        mFirstFrameLogged = false;
+        mErrorToasted = false;
         if (null == mStreamThread) {
             mStreamThread = new Thread(mStreamRunnable);
+            mStreamThread.setUncaughtExceptionHandler((t, e) -> {
+                Log.e(TAG, "stream thread crashed", e);
+                showToast("流线程崩溃: " + e);
+            });
             mStreamThread.start();
         }
     }
@@ -144,17 +156,20 @@ public class ColorViewerActivity extends AppCompatActivity {
 
     private Runnable mStreamRunnable = () -> {
         ByteBuffer buffer = null;
+        byte[] snapshotBuf = null;
         while (mIsStreamRunning) {
+            FrameSet frameSet = null;
+            ColorFrame colorFrame = null;
             try {
                 // Obtain the data set in blocking mode. If it cannot be obtained after waiting for 100ms, it will time out.
-                FrameSet frameSet = mPipeline.waitForFrameSet(100);
+                frameSet = mPipeline.waitForFrameSet(100);
 
                 if (null == frameSet) {
                     continue;
                 }
 
                 // Get color flow data
-                ColorFrame colorFrame = frameSet.getColorFrame();
+                colorFrame = frameSet.getColorFrame();
                 if (null != buffer) {
                     buffer.clear();
                 }
@@ -169,20 +184,49 @@ public class ColorViewerActivity extends AppCompatActivity {
                     colorFrame.getData(buffer);
                     mColorView.update(colorFrame.getWidth(), colorFrame.getHeight(), StreamType.COLOR, colorFrame.getFormat(), buffer, 1.0f);
 
-                    // Take an independent heap copy for photo capture
-                    byte[] rgbCopy = new byte[dataSize];
-                    colorFrame.getData(rgbCopy);
-                    mCaptureController.publish(new FrameSnapshot(colorFrame.getWidth(),
-                            colorFrame.getHeight(), StreamType.COLOR, colorFrame.getFormat(),
-                            1.0f, rgbCopy));
+                    if (!mFirstFrameLogged) {
+                        mFirstFrameLogged = true;
+                        Log.i(TAG, "first color frame: " + colorFrame.getWidth() + "x"
+                                + colorFrame.getHeight() + " " + colorFrame.getFormat());
+                        showToast("已收到首帧画面");
+                    }
 
-                    // Release color data frame
-                    colorFrame.close();
+                    // Take an independent heap copy for photo capture (reused buffer,
+                    // isolated so a capture failure can never break the stream loop)
+                    try {
+                        if (null == snapshotBuf || snapshotBuf.length != dataSize) {
+                            snapshotBuf = new byte[dataSize];
+                        }
+                        colorFrame.getData(snapshotBuf);
+                        if (mCaptureController != null) {
+                            mCaptureController.publish(new FrameSnapshot(colorFrame.getWidth(),
+                                    colorFrame.getHeight(), StreamType.COLOR, colorFrame.getFormat(),
+                                    1.0f, snapshotBuf));
+                        }
+                    } catch (Exception e) {
+                        Log.w(TAG, "capture publish failed: " + e.getMessage());
+                    }
                 }
-                // Release FrameSet
-                frameSet.close();
             } catch (Exception e) {
-                e.printStackTrace();
+                Log.e(TAG, "stream loop error", e);
+                if (!mErrorToasted) {
+                    mErrorToasted = true;
+                    showToast("流循环异常: " + e);
+                }
+            } finally {
+                // Always release frames, otherwise the pipeline stalls after a few frames
+                try {
+                    if (colorFrame != null) {
+                        colorFrame.close();
+                    }
+                } catch (Exception ignored) {
+                }
+                try {
+                    if (frameSet != null) {
+                        frameSet.close();
+                    }
+                } catch (Exception ignored) {
+                }
             }
         }
     };

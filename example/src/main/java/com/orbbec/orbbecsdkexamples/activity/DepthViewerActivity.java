@@ -43,6 +43,8 @@ public class DepthViewerActivity extends AppCompatActivity {
     private OBGLView mDepthView;
     private Device mDevice;
     private CaptureController mCaptureController;
+    private volatile boolean mFirstFrameLogged;
+    private volatile boolean mErrorToasted;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -50,8 +52,12 @@ public class DepthViewerActivity extends AppCompatActivity {
         setContentView(R.layout.activity_depth_viewer);
         mDepthView = findViewById(R.id.depthview_id);
         findViewById(R.id.btn_back).setOnClickListener(v -> finish());
-        mCaptureController = new CaptureController(this,
-                findViewById(R.id.btn_shutter), findViewById(R.id.tv_waiting), "DEPTH");
+        try {
+            mCaptureController = new CaptureController(this,
+                    findViewById(R.id.btn_shutter), findViewById(R.id.tv_waiting), "DEPTH");
+        } catch (Exception e) {
+            Log.e(TAG, "init capture failed: " + e.getMessage(), e);
+        }
         // 1.Initialize the SDK Context and listen device changes
         mOBContext = new OBContext(getApplicationContext(), new DeviceChangedCallback() {
             @Override
@@ -149,8 +155,14 @@ public class DepthViewerActivity extends AppCompatActivity {
 
     private void start() {
         mIsStreamRunning = true;
+        mFirstFrameLogged = false;
+        mErrorToasted = false;
         if (null == mStreamThread) {
             mStreamThread = new Thread(mStreamRunnable);
+            mStreamThread.setUncaughtExceptionHandler((t, e) -> {
+                Log.e(TAG, "stream thread crashed", e);
+                showToast("流线程崩溃: " + e);
+            });
             mStreamThread.start();
         }
     }
@@ -168,16 +180,18 @@ public class DepthViewerActivity extends AppCompatActivity {
 
     private Runnable mStreamRunnable = () -> {
         while (mIsStreamRunning) {
+            FrameSet frameSet = null;
+            DepthFrame frame = null;
             try {
                 // Obtain the data set in blocking mode. If it cannot be obtained after waiting for 100ms, it will time out.
-                FrameSet frameSet = mPipeline.waitForFrameSet(100);
+                frameSet = mPipeline.waitForFrameSet(100);
 
                 if (null == frameSet) {
                     continue;
                 }
 
                 // Get depth flow data
-                DepthFrame frame = frameSet.getDepthFrame();
+                frame = frameSet.getDepthFrame();
                 if (frame != null) {
                     // Get data and render
                     byte[] frameData = new byte[frame.getDataSize()];
@@ -185,19 +199,45 @@ public class DepthViewerActivity extends AppCompatActivity {
                     float scale = frame.getValueScale();
                     mDepthView.update(frame.getWidth(), frame.getHeight(), StreamType.DEPTH, frame.getFormat(), frameData, scale);
 
-                    // Publish the same frame for photo capture (copy is independent)
-                    mCaptureController.publish(new FrameSnapshot(frame.getWidth(),
-                            frame.getHeight(), StreamType.DEPTH, frame.getFormat(),
-                            scale, frameData));
+                    if (!mFirstFrameLogged) {
+                        mFirstFrameLogged = true;
+                        Log.i(TAG, "first depth frame: " + frame.getWidth() + "x"
+                                + frame.getHeight() + " " + frame.getFormat());
+                        showToast("已收到首帧画面");
+                    }
 
-                    // Release depth data frame
-                    frame.close();
+                    // Publish the same frame for photo capture (isolated so a
+                    // capture failure can never break the stream loop)
+                    try {
+                        if (mCaptureController != null) {
+                            mCaptureController.publish(new FrameSnapshot(frame.getWidth(),
+                                    frame.getHeight(), StreamType.DEPTH, frame.getFormat(),
+                                    scale, frameData));
+                        }
+                    } catch (Exception e) {
+                        Log.w(TAG, "capture publish failed: " + e.getMessage());
+                    }
                 }
-
-                // 释放数据集
-                frameSet.close();
             } catch (Exception e) {
-                e.printStackTrace();
+                Log.e(TAG, "stream loop error", e);
+                if (!mErrorToasted) {
+                    mErrorToasted = true;
+                    showToast("流循环异常: " + e);
+                }
+            } finally {
+                // Always release frames, otherwise the pipeline stalls after a few frames
+                try {
+                    if (frame != null) {
+                        frame.close();
+                    }
+                } catch (Exception ignored) {
+                }
+                try {
+                    if (frameSet != null) {
+                        frameSet.close();
+                    }
+                } catch (Exception ignored) {
+                }
             }
         }
     };

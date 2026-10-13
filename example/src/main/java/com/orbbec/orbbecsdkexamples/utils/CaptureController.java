@@ -29,8 +29,14 @@ public class CaptureController {
         mActivity = activity;
         mPrefix = prefix;
         mWaitingView = waitingView;
-        mShutterSound = new MediaActionSound();
-        mShutterSound.load(MediaActionSound.SHUTTER_CLICK);
+        MediaActionSound sound = null;
+        try {
+            sound = new MediaActionSound();
+            sound.load(MediaActionSound.SHUTTER_CLICK);
+        } catch (Exception e) {
+            sound = null;
+        }
+        mShutterSound = sound;
 
         shutterButton.setOnClickListener(v -> capture());
     }
@@ -74,7 +80,12 @@ public class CaptureController {
                 final String result = savedPath;
                 mActivity.runOnUiThread(() -> {
                     if (result != null) {
-                        mShutterSound.play(MediaActionSound.SHUTTER_CLICK);
+                        if (mShutterSound != null) {
+                            try {
+                                mShutterSound.play(MediaActionSound.SHUTTER_CLICK);
+                            } catch (Exception ignored) {
+                            }
+                        }
                         Toast.makeText(mActivity,
                                 mActivity.getString(R.string.photo_saved, result),
                                 Toast.LENGTH_LONG).show();
@@ -90,9 +101,11 @@ public class CaptureController {
     }
 
     public void release() {
-        try {
-            mShutterSound.release();
-        } catch (Exception ignored) {
+        if (mShutterSound != null) {
+            try {
+                mShutterSound.release();
+            } catch (Exception ignored) {
+            }
         }
     }
 }
