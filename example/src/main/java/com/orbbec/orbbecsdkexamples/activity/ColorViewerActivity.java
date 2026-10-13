@@ -24,6 +24,7 @@ import com.orbbec.obsensor.VideoStreamProfile;
 import com.orbbec.orbbecsdkexamples.R;
 import com.orbbec.orbbecsdkexamples.bean.FrameSnapshot;
 import com.orbbec.orbbecsdkexamples.utils.CaptureController;
+import com.orbbec.orbbecsdkexamples.utils.DebugLog;
 import com.orbbec.orbbecsdkexamples.view.OBGLView;
 
 import java.nio.ByteBuffer;
@@ -48,6 +49,7 @@ public class ColorViewerActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_color_viewer);
+        DebugLog.log(TAG, "onCreate");
         mColorView = findViewById(R.id.colorview_id);
         findViewById(R.id.btn_back).setOnClickListener(v -> finish());
         try {
@@ -60,6 +62,7 @@ public class ColorViewerActivity extends AppCompatActivity {
         mOBContext = new OBContext(getApplicationContext(), new DeviceChangedCallback() {
             @Override
             public void onDeviceAttach(DeviceList deviceList) {
+                DebugLog.log(TAG, "onDeviceAttach");
                 try {
                     if (null == mPipeline) {
                         // 2.Create Device and initialize Pipeline through Device
@@ -99,6 +102,7 @@ public class ColorViewerActivity extends AppCompatActivity {
 
                         // 7.Start sensor stream
                         mPipeline.start(config);
+                        DebugLog.log(TAG, "pipeline started");
 
                         // 8.Release config
                         config.close();
@@ -136,7 +140,7 @@ public class ColorViewerActivity extends AppCompatActivity {
         if (null == mStreamThread) {
             mStreamThread = new Thread(mStreamRunnable);
             mStreamThread.setUncaughtExceptionHandler((t, e) -> {
-                Log.e(TAG, "stream thread crashed", e);
+                DebugLog.log(TAG, "stream thread crashed: " + e);
                 showToast("流线程崩溃: " + e);
             });
             mStreamThread.start();
@@ -186,7 +190,7 @@ public class ColorViewerActivity extends AppCompatActivity {
 
                     if (!mFirstFrameLogged) {
                         mFirstFrameLogged = true;
-                        Log.i(TAG, "first color frame: " + colorFrame.getWidth() + "x"
+                        DebugLog.log(TAG, "first color frame: " + colorFrame.getWidth() + "x"
                                 + colorFrame.getHeight() + " " + colorFrame.getFormat());
                         showToast("已收到首帧画面");
                     }
@@ -208,7 +212,7 @@ public class ColorViewerActivity extends AppCompatActivity {
                     }
                 }
             } catch (Exception e) {
-                Log.e(TAG, "stream loop error", e);
+                DebugLog.log(TAG, "stream loop error: " + e);
                 if (!mErrorToasted) {
                     mErrorToasted = true;
                     showToast("流循环异常: " + e);

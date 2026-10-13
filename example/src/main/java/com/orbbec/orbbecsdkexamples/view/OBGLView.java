@@ -10,6 +10,7 @@ import android.view.ViewGroup;
 
 import com.orbbec.obsensor.Format;
 import com.orbbec.obsensor.StreamType;
+import com.orbbec.orbbecsdkexamples.utils.DebugLog;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
@@ -19,6 +20,7 @@ public class OBGLView extends GLSurfaceView {
 
     private OBRender mOBRender;
     private Handler mHandler;
+    private int mMismatchLogCount;
 
     public OBGLView(Context context) {
         super(context);
@@ -93,6 +95,12 @@ public class OBGLView extends GLSurfaceView {
         }
         float frameScale = new BigDecimal(frameW * 1.0f / frameH).setScale(1, BigDecimal.ROUND_HALF_UP).floatValue();
         if (viewScale != frameScale) {
+            if (mMismatchLogCount < 10) {
+                mMismatchLogCount++;
+                DebugLog.log(TAG, "checkViewSize mismatch #" + mMismatchLogCount
+                        + " view:" + viewW + "x" + viewH + "(" + viewScale + ")"
+                        + " frame:" + frameW + "x" + frameH + "(" + frameScale + ")");
+            }
             Log.i(TAG, "checkViewSize: view size:" + viewW + "x" + viewH + " view scale:" + viewScale
                     + " frameSize:" + frameW + "x" + frameH + " frameScale:" + frameScale);
             if (null != mHandler) {

@@ -1,64 +1,62 @@
 package com.orbbec.orbbecsdkexamples.utils;
 
-import android.os.Environment;
-import android.util.Log;
+import android.content.Context;
 
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.io.Writer;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Locale;
 
-public class MyCrashHandler implements Thread.UncaughtExceptionHandler{
+/**
+ * Writes crash stack traces to the app-private external files dir (readable via
+ * MTP on all Android versions), then chains to the default handler so the
+ * process actually terminates instead of hanging.
+ */
+public class MyCrashHandler implements Thread.UncaughtExceptionHandler {
+
+    private final Context mContext;
+    private final Thread.UncaughtExceptionHandler mDefaultHandler;
+
+    public MyCrashHandler(Context context) {
+        mContext = context.getApplicationContext();
+        mDefaultHandler = Thread.getDefaultUncaughtExceptionHandler();
+    }
+
     @Override
     public void uncaughtException(Thread t, Throwable e) {
-        saveCrashInfoToFile(e);
-    }
-
-    /**
-     * Save error message to file
-     * @param ex
-     */
-    private void saveCrashInfoToFile(Throwable ex) {
-        Writer writer = new StringWriter();
-        PrintWriter printWriter = new PrintWriter(writer);
-        ex.printStackTrace(printWriter);
-        Throwable exCause = ex.getCause();
-        while (exCause != null) {
-            exCause.printStackTrace(printWriter);
-            exCause =exCause.getCause();
+        try {
+            saveCrashInfoToFile(t, e);
+        } catch (Throwable ignored) {
         }
-        printWriter.close();
-
-        // Error log file name
-        String fileName = getTimeStamp() + ".txt";
-        // Determine whether the sd card can be used normally
-        if(Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {
-            // Log file storage location
-            String path = Environment.getExternalStorageDirectory().getPath() + "/OrbbecSample/crash/";
-            File file = new File(path);
-            // Create folder
-            Log.d("TAG", "file.exists() :" + file.exists());
-            if(!file.exists()) {
-                boolean isMkdirs = file.mkdirs();
-                Log.d("TAG", "isMkdirs :" + isMkdirs);
-            }
-            try {
-                FileOutputStream fileOutputStream = new FileOutputStream(path + fileName);
-                fileOutputStream.write(writer.toString().getBytes());
-                fileOutputStream.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+        DebugLog.log("CRASH", "uncaught in thread " + t.getName() + ": " + e);
+        if (mDefaultHandler != null) {
+            mDefaultHandler.uncaughtException(t, e);
+        } else {
+            android.os.Process.killProcess(android.os.Process.myPid());
         }
     }
 
-    private String getTimeStamp(){
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        return sdf.format(new Date(Long.valueOf(System.currentTimeMillis())));
-    }
+    private void saveCrashInfoToFile(Thread t, Throwable ex) throws Exception {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        ex.printStackTrace(pw);
+        Throwable cause = ex.getCause();
+        while (cause != null) {
+            cause.printStackTrace(pw);
+            cause = cause.getCause();
+        }
+        pw.close();
 
+        File dir = new File(mContext.getExternalFilesDir(null), "crash");
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+        String name = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + ".txt";
+        FileOutputStream fos = new FileOutputStream(new File(dir, name));
+        fos.write(("Thread: " + t.getName() + "\n\n" + sw).getBytes());
+        fos.close();
+    }
 }
