@@ -100,7 +100,7 @@ public final class PhotoSaver {
             }
             out.flush();
             MediaScannerConnection.scanFile(context,
-                    new String[]{file.getAbsolutePath()}, "image/jpeg", null);
+                    new String[]{file.getAbsolutePath()}, new String[]{"image/jpeg"}, null);
             return file.getAbsolutePath();
         } catch (Exception e) {
             Log.e(TAG, "saveToPublicDirectory failed: " + e.getMessage(), e);
