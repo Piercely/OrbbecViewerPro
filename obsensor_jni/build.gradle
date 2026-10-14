@@ -25,16 +25,6 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles "consumer-rules.pro"
 
-        externalNativeBuild {
-            cmake {
-                arguments "-DOBSENSOR_JNI_DIR=${getProjectDir().absolutePath}",
-                        "-DANDROID_STL=c++_shared",
-                        "-DANDROID_ARM_NEON=TRUE"
-                cppFlags "-std=c++11","-fopenmp"
-                abiFilters "arm64-v8a","armeabi-v7a"
-            }
-        }
-
         // Gradle v4.1.0 had removed VERSION_CODE and VERSION_NAME in BuildConfig
         // https://developer.android.google.cn/studio/releases/gradle-plugin#4.2-bundled-jdk-11
         buildConfigField("int", "VERSION_CODE", "${libVersionCode}")
@@ -65,13 +55,7 @@ android {
             jniLibs.srcDirs = ['libs']
         }
     }
-    externalNativeBuild {
-        cmake {
-            path "src/main/cpp/CMakeLists.txt"
-            version "3.18.1"
-        }
-    }
-    ndkVersion "${ob_ndk_version}"
+    // libobsensor_jni.so 已改用官方预编译版本（libs/<abi>/），不再从源码构建
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8

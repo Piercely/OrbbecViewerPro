@@ -69,6 +69,12 @@ public class SyncAlignViewerActivity extends AppCompatActivity implements SeekBa
     private Thread mConsumeThread;
     private volatile boolean mIsStreamRunning;
 
+    // 看门狗回退：回调路径无首帧时自动切换 waitForFrameSet 轮询
+    private volatile boolean mUsePolling;
+    private volatile boolean mFirstFrameSeen;
+    private boolean mWatchdogStarted;
+    private Thread mPollThread;
+
     private OBGLView mColorView;
     private CheckBox mSyncCb;
     private CheckBox mHardwareD2CCb;
@@ -257,6 +263,7 @@ public class SyncAlignViewerActivity extends AppCompatActivity implements SeekBa
             mFirstFrameLogged = false;
             mErrorToasted = false;
             startConsumeThread();
+            startFirstFrameWatchdog();
             Log.i(TAG, "pipeline started with callback");
         } catch (Exception e) {
             Log.e(TAG, "startPipeline error: " + e.getMessage(), e);
@@ -273,9 +280,75 @@ public class SyncAlignViewerActivity extends AppCompatActivity implements SeekBa
     }
 
     /**
-     * 帧集回调（运行在 SDK 回调线程）：只拷贝深度/彩色原始数据并入队，尽快返回
+     * 首帧看门狗：5 秒内未收到任何帧集则自动切换到 waitForFrameSet 轮询路径
      */
-    private final FrameSetCallback mFrameSetCallback = frameSet -> {
+    private void startFirstFrameWatchdog() {
+        if (mWatchdogStarted) {
+            return;
+        }
+        mWatchdogStarted = true;
+        Thread t = new Thread(() -> {
+            try {
+                Thread.sleep(5000);
+            } catch (InterruptedException e) {
+                return;
+            }
+            if (!mFirstFrameSeen && mPipeline != null && !mUsePolling) {
+                switchToPolling();
+            }
+        }, "sync-watchdog");
+        t.start();
+    }
+
+    private void switchToPolling() {
+        try {
+            if (mPipeline == null || mConfig == null) {
+                return;
+            }
+            DebugLog.log(TAG, "no first frameset, switch to polling");
+            showToast("正在切换备用取流方式...");
+            try {
+                mPipeline.stop();
+            } catch (Exception ignored) {
+            }
+            try {
+                mPipeline.start(mConfig);
+            } catch (Exception e) {
+                DebugLog.log(TAG, "poll restart failed: " + e);
+                showToast("备用取流方式启动失败: " + e.getMessage());
+                return;
+            }
+            mUsePolling = true;
+            mPollThread = new Thread(mPollRunnable, "sync-poll");
+            mPollThread.start();
+        } catch (Exception e) {
+            DebugLog.log(TAG, "switchToPolling error: " + e);
+        }
+    }
+
+    /**
+     * 轮询回退线程：持续从管线拉取帧集（与回调共用 handleFrameSet 处理）
+     */
+    private final Runnable mPollRunnable = () -> {
+        DebugLog.log(TAG, "polling loop started");
+        while (mIsStreamRunning) {
+            FrameSet fs = null;
+            try {
+                fs = mPipeline.waitForFrameSet(100);
+            } catch (Exception e) {
+                continue;
+            }
+            if (fs == null) {
+                continue;
+            }
+            handleFrameSet(fs);
+        }
+    };
+
+    /**
+     * 处理一帧帧集（回调线程或轮询线程）：只拷贝深度/彩色原始数据并入队，尽快返回
+     */
+    private void handleFrameSet(FrameSet frameSet) {
         DepthFrame depthFrame = null;
         ColorFrame colorFrame = null;
         try {
@@ -313,6 +386,7 @@ public class SyncAlignViewerActivity extends AppCompatActivity implements SeekBa
                 mFrameQueue.poll();
                 mFrameQueue.offer(pair);
             }
+            mFirstFrameSeen = true;
         } catch (Exception e) {
             Log.w(TAG, "frameset callback error: " + e);
         } finally {
@@ -334,7 +408,12 @@ public class SyncAlignViewerActivity extends AppCompatActivity implements SeekBa
             } catch (Exception ignored) {
             }
         }
-    };
+    }
+
+    /**
+     * 帧集回调（运行在 SDK 回调线程）：与轮询回退共用 handleFrameSet 处理
+     */
+    private final FrameSetCallback mFrameSetCallback = this::handleFrameSet;
 
     private void initView() {
         mColorView = findViewById(R.id.colorview_id);
@@ -509,6 +588,15 @@ public class SyncAlignViewerActivity extends AppCompatActivity implements SeekBa
     protected void onDestroy() {
         super.onDestroy();
         try {
+            // 0. 先停轮询回退线程
+            mIsStreamRunning = false;
+            if (null != mPollThread) {
+                try {
+                    mPollThread.join(300);
+                } catch (Exception ignored) {
+                }
+                mPollThread = null;
+            }
             // 1. 先停止取流，再停止消费线程
             if (null != mPipeline) {
                 try {
