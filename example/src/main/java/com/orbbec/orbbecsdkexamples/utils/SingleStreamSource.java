@@ -96,7 +96,7 @@ public class SingleStreamSource {
             return;
         }
         mRunning = true;
-        mThread = new Thread(mConsumeRunnable, "stream-" + mStreamType.name().toLowerCase());
+        mThread = new Thread(newConsumeRunnable(), "stream-" + mStreamType.name().toLowerCase());
         mThread.setUncaughtExceptionHandler((t, e) -> {
             DebugLog.log(TAG, "consume thread crashed: " + e);
             notifyInfo("渲染线程异常: " + e);
@@ -152,7 +152,7 @@ public class SingleStreamSource {
                 DebugLog.log(TAG, mStreamType + " sensor profile: " + profile.getWidth() + "x"
                         + profile.getHeight() + "@" + profile.getFps() + " " + profile.getFormat());
                 try {
-                    sensor.start(profile, mFrameCallback);
+                    sensor.start(profile, newFrameCallback());
                 } catch (Exception e) {
                     DebugLog.log(TAG, "sensor.start failed: " + e);
                     profile.close();
@@ -171,7 +171,8 @@ public class SingleStreamSource {
         }
     }
 
-    private final FrameCallback mFrameCallback = frame -> {
+    private FrameCallback newFrameCallback() {
+        return frame -> {
         VideoFrame vf = null;
         try {
             // as() 包装与 frame 共享同一 native 句柄，finally 中只 close 一次
@@ -201,7 +202,8 @@ public class SingleStreamSource {
             } catch (Exception ignored) {
             }
         }
-    };
+        };
+    }
 
     // ------------------------------------------------------------------
     // 路径二：Pipeline + waitForFrameSet 轮询（原 examples 实现，回退用）
@@ -309,7 +311,8 @@ public class SingleStreamSource {
     // 消费线程
     // ------------------------------------------------------------------
 
-    private final Runnable mConsumeRunnable = () -> {
+    private Runnable newConsumeRunnable() {
+        return () -> {
         while (mRunning) {
             if (mPipelineActive) {
                 // 回退路径：在同一消费线程内轮询取帧
@@ -354,7 +357,8 @@ public class SingleStreamSource {
             mFirstFrameSeen = true;
             mListener.onFrame(s);
         }
-    };
+        };
+    }
 
     // ------------------------------------------------------------------
     // 资源释放
