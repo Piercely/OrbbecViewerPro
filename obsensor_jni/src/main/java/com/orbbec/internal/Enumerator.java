@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
+import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
@@ -36,7 +37,20 @@ public class Enumerator {
     private BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
+            // USB 插拔广播处理绝不允许抛异常，否则应用会在收到广播时直接崩溃
+            try {
+                handleUsbBroadcast(context, intent);
+            } catch (Throwable e) {
+                Log.e(TAG, "onReceive failed: " + e.getMessage(), e);
+            }
+        }
+
+        private void handleUsbBroadcast(Context context, Intent intent) {
             String action = intent.getAction();
+            if (null == action) {
+                Log.w(TAG, "onReceive: null action");
+                return;
+            }
             UsbDevice usbDevice = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
             String deviceText = UsbUtilities.getUsbDeviceBriefText(usbDevice);
             Log.i(TAG, "onReceive: " + action + ", usbDevice: " + deviceText);
@@ -48,29 +62,29 @@ public class Enumerator {
                 case UsbManager.ACTION_USB_DEVICE_ATTACHED: {
                     UsbManager usbManager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
                     Log.i(TAG, "USB Device attach. device: " + deviceText + ", hasPermission: " + usbManager.hasPermission(usbDevice));
-                    if (null != usbDevice) {
-                        if (usbManager.hasPermission(usbDevice)) {
-                            if (null != mHandler) {
-                                Message msg = mHandler.obtainMessage(MessagesHandler.MSG_ON_DEVICE_ATTACHED);
-                                msg.obj = usbDevice;
-                                mHandler.sendMessage(msg);
-                            } // if mHandler
-                        } else {
-                            Log.i(TAG, "USB Device attach. device: " + deviceText + ", require permission");
-                            requireUsbPermission(context, usbDevice);
-                        }
+                    // 使用局部变量避免与 close() 竞态导致 NPE
+                    Handler handler = mHandler;
+                    if (usbManager.hasPermission(usbDevice)) {
+                        if (null != handler) {
+                            Message msg = handler.obtainMessage(MessagesHandler.MSG_ON_DEVICE_ATTACHED);
+                            msg.obj = usbDevice;
+                            handler.sendMessage(msg);
+                        } // if handler
+                    } else {
+                        Log.i(TAG, "USB Device attach. device: " + deviceText + ", require permission");
+                        requireUsbPermission(context, usbDevice);
                     }
                     break;
                 }
                 case UsbManager.ACTION_USB_DEVICE_DETACHED: {
                     Log.i(TAG, "USB Device detach. device: " + deviceText);
-                    if (null != usbDevice) {
-                        if (null != mHandler) {
-                            Message msg = mHandler.obtainMessage(MessagesHandler.MSG_ON_DEVICE_DETACHED);
-                            msg.obj = usbDevice;
-                            mHandler.sendMessage(msg);
-                        } // if mHandler
-                    }
+                    // 使用局部变量避免与 close() 竞态导致 NPE
+                    Handler handler = mHandler;
+                    if (null != handler) {
+                        Message msg = handler.obtainMessage(MessagesHandler.MSG_ON_DEVICE_DETACHED);
+                        msg.obj = usbDevice;
+                        handler.sendMessage(msg);
+                    } // if handler
                     break;
                 }
             }
@@ -151,29 +165,40 @@ public class Enumerator {
     }
 
     private final void requireUsbPermission(Context context, UsbDevice usbDevice) {
-        final String action = ACTION_REQUIRE_USB_PERMISSION + "#" + usbDevice.getDeviceName() + "#"
-                + String.format("0x%08x", usbDevice.getDeviceId());
-        if (null == mHandler) {
-            Log.w(TAG, "requireUsbPermission mHandler=null, no require usb permission. action: " + action);
-            return;
+        // 权限申请失败不能抛异常（该方法可能在主线程广播回调中被调用）
+        try {
+            final String action = ACTION_REQUIRE_USB_PERMISSION + "#" + usbDevice.getDeviceName() + "#"
+                    + String.format("0x%08x", usbDevice.getDeviceId());
+            if (null == mHandler) {
+                Log.w(TAG, "requireUsbPermission mHandler=null, no require usb permission. action: " + action);
+                return;
+            }
+
+            IntentFilter intentFilter = new IntentFilter(action);
+            final USBPermissionReceiver receiver = new USBPermissionReceiver(context, usbDevice, action);
+            // targetSdk 33 起，注册非系统广播的接收器必须显式声明导出状态，否则抛 SecurityException，
+            // 导致 USB 权限弹窗永不出现、设备永远无法枚举成功
+            if (Build.VERSION.SDK_INT >= 33) {
+                context.registerReceiver(receiver, intentFilter, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                context.registerReceiver(receiver, intentFilter);
+            }
+
+            if (null != mHandler) {
+                Message msg = Message.obtain(mHandler, () -> {
+                    receiver.unregisterReceiver();
+                });
+                msg.obj = receiver;
+                mHandler.sendMessageDelayed(msg, 60000);
+            }
+
+            Log.d(TAG, "requireUsbPermission launch action: " + action);
+            UsbManager usbManager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
+            PendingIntent pi = PendingIntent.getBroadcast(context, 0, new Intent(action), PendingIntent.FLAG_IMMUTABLE);
+            usbManager.requestPermission(usbDevice, pi);
+        } catch (Exception e) {
+            Log.e(TAG, "requireUsbPermission failed: " + e.getMessage(), e);
         }
-
-        IntentFilter intentFilter = new IntentFilter(action);
-        final USBPermissionReceiver receiver = new USBPermissionReceiver(context, usbDevice, action);
-        context.registerReceiver(receiver, intentFilter);
-
-        if (null != mHandler) {
-            Message msg = Message.obtain(mHandler, () -> {
-                receiver.unregisterReceiver();
-            });
-            msg.obj = receiver;
-            mHandler.sendMessageDelayed(msg, 60000);
-        }
-
-        Log.d(TAG, "requireUsbPermission launch action: " + action);
-        UsbManager usbManager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
-        PendingIntent pi = PendingIntent.getBroadcast(context, 0, new Intent(action), PendingIntent.FLAG_IMMUTABLE);
-        usbManager.requestPermission(usbDevice, pi);
     }
 
     private class USBPermissionReceiver extends BroadcastReceiver {

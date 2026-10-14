@@ -31,7 +31,9 @@ public class MyCrashHandler implements Thread.UncaughtExceptionHandler {
             saveCrashInfoToFile(t, e);
         } catch (Throwable ignored) {
         }
-        DebugLog.log("CRASH", "uncaught in thread " + t.getName() + ": " + e);
+        // 文件日志中带上完整堆栈，便于通过 orbbec_debug.log 直接定位崩溃根因
+        DebugLog.log("CRASH", "uncaught in thread " + t.getName() + ": " + e
+                + "\n" + android.util.Log.getStackTraceString(e));
         if (mDefaultHandler != null) {
             mDefaultHandler.uncaughtException(t, e);
         } else {

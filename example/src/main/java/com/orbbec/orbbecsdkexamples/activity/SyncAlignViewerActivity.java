@@ -131,7 +131,7 @@ public class SyncAlignViewerActivity extends AppCompatActivity implements SeekBa
 
     private void initOBContext() {
         // 1. 初始化 SDK Context 并监听设备变化
-        mOBContext = new OBContext(this, new DeviceChangedCallback() {
+        mOBContext = new OBContext(getApplicationContext(), new DeviceChangedCallback() {
             @Override
             public void onDeviceAttach(DeviceList deviceList) {
                 DebugLog.log(TAG, "onDeviceAttach");
