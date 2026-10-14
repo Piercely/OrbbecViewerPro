@@ -8,6 +8,7 @@ import android.text.TextUtils;
 import android.util.Log;
 
 import com.orbbec.internal.DeviceWatcher;
+import com.orbbec.internal.OBLog;
 
 import java.io.File;
 
@@ -89,10 +90,15 @@ public class OBContext extends LobClass {
         initInstanceNum();
         initDefaultLogConfig(context);
         mHandle = nCreate();
+        OBLog.log(TAG, "OBContext created: handle=0x" + Long.toHexString(mHandle)
+                + ", instanceNum=" + mInstanceNum);
         nSetDeviceChangedCallback(mHandle, mDeviceChangedCallbackImpl);
         setDevicesChangedCallback(callback);
         if (mDeviceWatcher == null) {
+            OBLog.log(TAG, "create new DeviceWatcher");
             mDeviceWatcher = new DeviceWatcher(context);
+        } else {
+            OBLog.log(TAG, "reuse shared DeviceWatcher (instanceNum=" + mInstanceNum + ")");
         }
     }
 
@@ -462,12 +468,21 @@ public class OBContext extends LobClass {
         throwInitializeException();
         nSetDeviceChangedCallback(mHandle, null);
         removeDevicesChangedCallback();
-        if (mDeviceWatcher != null) {
+        // mDeviceWatcher 是多实例共享的静态对象。Activity 切换时下一个页面先 onCreate、
+        // 上一个页面后 onDestroy，若最后一个创建者的 close() 无条件关闭共享 watcher，
+        // 会把其他存活实例的设备枚举能力一并杀掉。因此仅在最后一个实例关闭时才释放。
+        boolean lastInstance;
+        synchronized (OBContext.class) {
+            lastInstance = (mInstanceNum <= 1);
+        }
+        if (lastInstance && mDeviceWatcher != null) {
+            OBLog.log(TAG, "close: last instance, release shared DeviceWatcher");
             mDeviceWatcher.close();
             mDeviceWatcher = null;
         }
         nDelete(mHandle);
         mHandle = 0;
+        OBLog.log(TAG, "OBContext closed");
 
         decreaseInstanceNum();
         if (mInstanceNum <= 0) {

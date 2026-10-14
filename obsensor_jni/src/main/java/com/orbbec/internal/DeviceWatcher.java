@@ -29,23 +29,25 @@ public class DeviceWatcher extends LobClass {
     private DeviceListener mListener = new DeviceListener() {
         @Override
         public void onDeviceAttach(UsbDevice usbDevice) {
-            Log.d(TAG, " onDeviceAttach Adding device. deviceName: " + usbDevice.getDeviceName()
-                    + ", sn: " + usbDevice.getSerialNumber() + ", deviceId:" + usbDevice.getDeviceId());
+            OBLog.log(TAG, "onDeviceAttach Adding device. deviceName: " + usbDevice.getDeviceName()
+                    + ", deviceId:" + usbDevice.getDeviceId());
             addDevice(usbDevice);
         }
 
         @Override
         public void onDeviceDetach(UsbDevice usbDevice) {
-            Log.d(TAG, " onDeviceDetach remove device.  deviceName: " + usbDevice.getDeviceName()
-                    + ", sn: " + usbDevice.getSerialNumber() + ", deviceId:" + usbDevice.getDeviceId());
+            OBLog.log(TAG, "onDeviceDetach remove device. deviceName: " + usbDevice.getDeviceName()
+                    + ", deviceId:" + usbDevice.getDeviceId());
             removeDevice(usbDevice);
         }
     };
 
     public DeviceWatcher(Context context) {
         mContext = context;
+        OBLog.log(TAG, "DeviceWatcher ctor: nRegisterClassObj...");
         nRegisterClassObj(this);
         mEnumerator = new Enumerator(mContext, mListener);
+        OBLog.log(TAG, "DeviceWatcher ctor: done");
     }
 
     private void removeDevice(UsbDeviceInfo usbDevInfo) {
@@ -54,14 +56,14 @@ public class DeviceWatcher extends LobClass {
     }
 
     private void addDevice(UsbDevice device) {
-        Log.d(TAG, "Device:  addDevice");
+        OBLog.log(TAG, "addDevice: enter");
         if (device == null) {
             return;
         }
 
         UsbManager usbManager = (UsbManager) mContext.getSystemService(Context.USB_SERVICE);
         if (!usbManager.hasPermission(device)) {
-            Log.e(TAG, "Device: " + "has not permission ");
+            OBLog.log(TAG, "[E] addDevice: has not permission");
             return;
         }
         int miId = 0;
@@ -88,13 +90,16 @@ public class DeviceWatcher extends LobClass {
             UsbDeviceInfo usbDevInfo = new UsbDeviceInfo(device.getDeviceName(), device.getDeviceId(),
                     device.getVendorId(), device.getProductId(), miId,
                     device.getSerialNumber(), cls);
-            Log.d(TAG, "Adding device: " + usbDevInfo.mName
+            OBLog.log(TAG, "addDevice: " + usbDevInfo.mName
                     + String.format(" uid: 0x%08x vid: 0x%04x  pid: 0x%04x", usbDevInfo.mUid, usbDevInfo.mVid, usbDevInfo.mPid)
-                    + " miId: " + usbDevInfo.mMiId + " serialNum: " + usbDevInfo.mSerialNum
-                    + " cls: " + usbDevInfo.mCls);
+                    + " miId: " + usbDevInfo.mMiId + " cls: " + usbDevInfo.mCls);
             usbDevInfoList.add(usbDevInfo);
-            nAddUsbDevice(usbDevInfo);
-            Log.d(TAG, "Device: " + usbDevInfo.mName + " added successfully");
+            try {
+                nAddUsbDevice(usbDevInfo);
+                OBLog.log(TAG, "addDevice: nAddUsbDevice done");
+            } catch (Throwable t) {
+                OBLog.log(TAG, "[E] addDevice: nAddUsbDevice failed: " + t);
+            }
         }
         mUsbDeviceInfos.put(device.getDeviceName(), usbDevInfoList);
     }
@@ -143,13 +148,15 @@ public class DeviceWatcher extends LobClass {
                     UsbDeviceConnection connection = mUsbDeviceConnections.get(uid);
                     if (null == connection) {
                         connection = usbManager.openDevice(usbDevice);
-                        Log.i(TAG, "openUsbDevice: usbDevice: " + UsbUtilities.getUsbDeviceBriefText(usbDevice));
+                        OBLog.log(TAG, "openUsbDevice: opened fd for uid=" + uid
+                                + ", connection=" + (connection != null));
                         mUsbDeviceConnections.put(uid, connection);
                     }
                     return connection.getFileDescriptor();
                 }
             }
         }
+        OBLog.log(TAG, "[W] openUsbDevice: uid=" + uid + " not found in usb device list");
         return 0;
     }
 

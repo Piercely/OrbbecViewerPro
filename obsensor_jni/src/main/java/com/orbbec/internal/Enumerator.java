@@ -48,12 +48,17 @@ public class Enumerator {
         private void handleUsbBroadcast(Context context, Intent intent) {
             String action = intent.getAction();
             if (null == action) {
-                Log.w(TAG, "onReceive: null action");
+                OBLog.log(TAG, "[W] onReceive: null action");
                 return;
             }
             UsbDevice usbDevice = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
-            String deviceText = UsbUtilities.getUsbDeviceBriefText(usbDevice);
-            Log.i(TAG, "onReceive: " + action + ", usbDevice: " + deviceText);
+            String deviceText;
+            try {
+                deviceText = UsbUtilities.getUsbDeviceBriefText(usbDevice);
+            } catch (Throwable e) {
+                deviceText = "(briefText failed: " + e + ")";
+            }
+            OBLog.log(TAG, "onReceive: " + action + ", usbDevice: " + deviceText);
             if (null == usbDevice || !UsbUtilities.isOrbbecDevice(usbDevice)) {
                 return;
             }
@@ -61,7 +66,8 @@ public class Enumerator {
             switch (action) {
                 case UsbManager.ACTION_USB_DEVICE_ATTACHED: {
                     UsbManager usbManager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
-                    Log.i(TAG, "USB Device attach. device: " + deviceText + ", hasPermission: " + usbManager.hasPermission(usbDevice));
+                    OBLog.log(TAG, "USB Device attach. device: " + deviceText
+                            + ", hasPermission: " + usbManager.hasPermission(usbDevice));
                     // 使用局部变量避免与 close() 竞态导致 NPE
                     Handler handler = mHandler;
                     if (usbManager.hasPermission(usbDevice)) {
@@ -71,13 +77,13 @@ public class Enumerator {
                             handler.sendMessage(msg);
                         } // if handler
                     } else {
-                        Log.i(TAG, "USB Device attach. device: " + deviceText + ", require permission");
+                        OBLog.log(TAG, "USB Device attach. device: " + deviceText + ", require permission");
                         requireUsbPermission(context, usbDevice);
                     }
                     break;
                 }
                 case UsbManager.ACTION_USB_DEVICE_DETACHED: {
-                    Log.i(TAG, "USB Device detach. device: " + deviceText);
+                    OBLog.log(TAG, "USB Device detach. device: " + deviceText);
                     // 使用局部变量避免与 close() 竞态导致 NPE
                     Handler handler = mHandler;
                     if (null != handler) {
@@ -120,6 +126,7 @@ public class Enumerator {
         mMessagesThread.start();
 
         mHandler = new MessagesHandler(mMessagesThread.getLooper());
+        OBLog.log(TAG, "init: receiver registered, thread started, query devices...");
         Message msg = mHandler.obtainMessage(MessagesHandler.MSG_NOTIFY_QUERY_DEVICES);
         msg.obj = context;
         mHandler.sendMessage(msg);
@@ -170,7 +177,7 @@ public class Enumerator {
             final String action = ACTION_REQUIRE_USB_PERMISSION + "#" + usbDevice.getDeviceName() + "#"
                     + String.format("0x%08x", usbDevice.getDeviceId());
             if (null == mHandler) {
-                Log.w(TAG, "requireUsbPermission mHandler=null, no require usb permission. action: " + action);
+                OBLog.log(TAG, "[W] requireUsbPermission mHandler=null, no require usb permission. action: " + action);
                 return;
             }
 
@@ -192,12 +199,13 @@ public class Enumerator {
                 mHandler.sendMessageDelayed(msg, 60000);
             }
 
-            Log.d(TAG, "requireUsbPermission launch action: " + action);
+            OBLog.log(TAG, "requireUsbPermission launch action: " + action);
             UsbManager usbManager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
             PendingIntent pi = PendingIntent.getBroadcast(context, 0, new Intent(action), PendingIntent.FLAG_IMMUTABLE);
             usbManager.requestPermission(usbDevice, pi);
-        } catch (Exception e) {
-            Log.e(TAG, "requireUsbPermission failed: " + e.getMessage(), e);
+            OBLog.log(TAG, "requireUsbPermission requestPermission() sent (system dialog expected)");
+        } catch (Throwable e) {
+            OBLog.log(TAG, "[E] requireUsbPermission failed: " + e);
         }
     }
 
@@ -222,9 +230,9 @@ public class Enumerator {
 
         @Override
         public void onReceive(Context context, Intent intent) {
-            Log.i(TAG, "USBPermissionReceiver#onReceive action: " + intent.getAction());
+            OBLog.log(TAG, "USBPermissionReceiver#onReceive action: " + intent.getAction());
             if (!TextUtils.equals(intent.getAction(), action)) {
-                Log.e(TAG, "USBPermissionReceiver#onReceive invalid action: " + intent.getAction());
+                OBLog.log(TAG, "[E] USBPermissionReceiver#onReceive invalid action: " + intent.getAction());
                 return;
             }
             unregisterReceiver();
@@ -246,7 +254,7 @@ public class Enumerator {
                 }
             }
             if (null == usbDevice) {
-                Log.d(TAG, "USBPermissionReceiver#onReceive find device from UsbManager failed."
+                OBLog.log(TAG, "[W] USBPermissionReceiver#onReceive find device from UsbManager failed."
                         + " action: " + action);
                 return;
             }
@@ -269,7 +277,7 @@ public class Enumerator {
             boolean isGranted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false);
             boolean hasPermission = (null != usbDevice ? usbManager.hasPermission(usbDevice) : false);
             String deviceText = UsbUtilities.getUsbDeviceBriefText(usbDevice);
-            Log.i(TAG, "USBPermissionReceiver#onReceive. device: " + deviceText + ", isGranted: " + isGranted
+            OBLog.log(TAG, "USBPermissionReceiver#onReceive. device: " + deviceText + ", isGranted: " + isGranted
                     + ", hasPermission: " + hasPermission);
             if (null != usbDevice && hasPermission && null != mHandler) {
                 // Notify device attached
@@ -301,12 +309,12 @@ public class Enumerator {
             try {
                 switch (msg.what) {
                     case MSG_ON_DEVICE_ATTACHED: {
-                        Log.i(TAG, "handleMessage: OrbbecSensor device attached");
+                        OBLog.log(TAG, "handleMessage: OrbbecSensor device attached");
                         handleDeviceAttached((UsbDevice) msg.obj);
                         break;
                     }
                     case MSG_ON_DEVICE_DETACHED: {
-                        Log.i(TAG, "handleMessage: OrbbecSensor device detached");
+                        OBLog.log(TAG, "handleMessage: OrbbecSensor device detached");
                         handleDeviceDetached((UsbDevice) msg.obj);
                         break;
                     }
@@ -315,8 +323,8 @@ public class Enumerator {
                         break;
                     }
                 }
-            } catch (Exception e) {
-                Log.e(TAG, "handleMessage: failed to open device, error: " + e.getMessage());
+            } catch (Throwable e) {
+                OBLog.log(TAG, "[E] handleMessage: failed to handle msg " + msg.what + ", error: " + e);
             }
         }
 
@@ -328,6 +336,8 @@ public class Enumerator {
                     isAdded = true;
                 }
             }
+            OBLog.log(TAG, "handleDeviceAttached: deviceId=" + usbDevice.getDeviceId()
+                    + ", isAdded=" + isAdded + ", mListener=" + (mListener != null));
             if (isAdded && null != mListener) {
                 mListener.onDeviceAttach(usbDevice);
             }
@@ -349,13 +359,17 @@ public class Enumerator {
         private void handleQueryDevices(Context context) {
             UsbManager usbManager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
             Map<String, UsbDevice> deviceMap = usbManager.getDeviceList();
+            OBLog.log(TAG, "handleQueryDevices: total usb devices=" + deviceMap.size());
             Iterator<Map.Entry<String, UsbDevice>> iters =  deviceMap.entrySet().iterator();
             while (iters.hasNext()) {
                 Map.Entry<String, UsbDevice> e = iters.next();
                 UsbDevice usbDevice = e.getValue();
                 if (UsbUtilities.isOrbbecDevice(usbDevice)) {
                     String deviceText = UsbUtilities.getUsbDeviceBriefText(usbDevice);
-                    if (usbManager.hasPermission(usbDevice)) {
+                    boolean hasPermission = usbManager.hasPermission(usbDevice);
+                    OBLog.log(TAG, "handleQueryDevices: orbbec device " + deviceText
+                            + ", hasPermission: " + hasPermission);
+                    if (hasPermission) {
                         boolean isAdded = false;
                         synchronized (mUsbDeviceMap) {
                             if (mUsbDeviceMap.indexOfKey(usbDevice.getDeviceId()) < 0) {
@@ -367,7 +381,7 @@ public class Enumerator {
                             mListener.onDeviceAttach(usbDevice);
                         }
                     } else {
-                        Log.i(TAG, "Query USB devices. device: " + deviceText + ", require permission");
+                        OBLog.log(TAG, "handleQueryDevices: require usb permission");
                         requireUsbPermission(context, usbDevice);
                     }
                 } // if isOrbbecDevice

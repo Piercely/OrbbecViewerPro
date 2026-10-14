@@ -1,69 +1,29 @@
 package com.orbbec.orbbecsdkexamples.utils;
 
 import android.content.Context;
-import android.util.Log;
-
-import java.io.File;
-import java.io.FileOutputStream;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
 
 /**
  * Lightweight file logger for field diagnostics. Writes timestamped lines to
  * <code>Android/data/&lt;pkg&gt;/files/logs/orbbec_debug.log</code> which is
  * readable via MTP without any storage permission.
+ * <p>
+ * 实际实现委托给 obsensor_jni 模块的 {@link com.orbbec.internal.OBLog}，
+ * 使枚举链路（Enumerator/DeviceWatcher/OBContext）与应用层共用同一个日志文件。
  */
 public final class DebugLog {
-
-    private static final long MAX_SIZE = 512 * 1024;
-    private static final SimpleDateFormat TS =
-            new SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US);
-
-    private static File sFile;
 
     private DebugLog() {
     }
 
     public static synchronized void init(Context context) {
-        try {
-            File dir = context.getExternalFilesDir("logs");
-            if (dir == null) {
-                return;
-            }
-            if (!dir.exists()) {
-                dir.mkdirs();
-            }
-            sFile = new File(dir, "orbbec_debug.log");
-            if (sFile.exists() && sFile.length() > MAX_SIZE) {
-                sFile.delete();
-            }
-            log("DebugLog", "===== app start =====");
-        } catch (Throwable ignored) {
-        }
+        com.orbbec.internal.OBLog.init(context, true);
     }
 
     public static synchronized void log(String tag, String msg) {
-        Log.i(tag, msg);
-        if (sFile == null) {
-            return;
-        }
-        FileOutputStream fos = null;
-        try {
-            fos = new FileOutputStream(sFile, true);
-            fos.write((TS.format(new Date()) + " " + tag + ": " + msg + "\n").getBytes());
-        } catch (Throwable ignored) {
-        } finally {
-            if (fos != null) {
-                try {
-                    fos.close();
-                } catch (Exception ignored) {
-                }
-            }
-        }
+        com.orbbec.internal.OBLog.log(tag, msg);
     }
 
     public static String getLogFilePath() {
-        return sFile != null ? sFile.getAbsolutePath() : null;
+        return com.orbbec.internal.OBLog.getLogFilePath();
     }
 }
