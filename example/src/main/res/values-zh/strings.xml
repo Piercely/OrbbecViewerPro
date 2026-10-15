@@ -51,6 +51,8 @@
     <string name="photo_failed">照片保存失败</string>
     <string name="capture_btn">拍照采集</string>
     <string name="capture_count_fmt">已采集: %d 组</string>
+    <string name="capture_overlay_off">伪彩关</string>
+    <string name="capture_overlay_on">伪彩开</string>
     <!--
     This string is used for square devices and overridden by hello_world in
     values-round/strings.xml for round devices.

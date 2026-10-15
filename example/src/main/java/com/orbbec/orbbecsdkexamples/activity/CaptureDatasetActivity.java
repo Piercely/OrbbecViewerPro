@@ -8,6 +8,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.provider.MediaStore;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
@@ -16,6 +17,7 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.orbbec.obsensor.AlignMode;
+import com.orbbec.obsensor.CameraParam;
 import com.orbbec.obsensor.ColorFrame;
 import com.orbbec.obsensor.Config;
 import com.orbbec.obsensor.DepthFrame;
@@ -35,13 +37,18 @@ import com.orbbec.obsensor.SensorType;
 import com.orbbec.obsensor.StreamProfileList;
 import com.orbbec.obsensor.StreamType;
 import com.orbbec.obsensor.VideoStreamProfile;
+import com.orbbec.obsensor.datatype.CameraDistortion;
+import com.orbbec.obsensor.datatype.CameraIntrinsic;
+import com.orbbec.obsensor.datatype.D2CTransform;
 import com.orbbec.orbbecsdkexamples.R;
+import com.orbbec.orbbecsdkexamples.utils.DepthColorizer;
 import com.orbbec.orbbecsdkexamples.utils.DepthPngEncoder;
 import com.orbbec.orbbecsdkexamples.utils.ImageUtils;
 import com.orbbec.orbbecsdkexamples.utils.LocalUtils;
 import com.orbbec.orbbecsdkexamples.view.OBGLView;
 
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -52,13 +59,16 @@ import java.util.concurrent.Executors;
  * 数据集采集 Activity：对齐的 RGB + 16-bit 深度 PNG 对，供模型训练使用。
  * <p>
  * - 使用 D2C（深度对齐到彩色）保证 RGB 与深度像素一一对应
- * - 保存路径：Pictures/OrbbecViewer/，文件名 rgb_<时间戳>.png / depth_<时间戳>.png
+ * - 保存路径：Pictures/OrbbecViewer/，文件名 rgb_<时间戳>.png / depth_<时间戳>.png / meta_<时间戳>.json
  * - 深度为 16-bit 灰度 PNG，单位 mm，训练侧可直接读取为 uint16
+ * - 功能：单拍 / 长按连拍 / 深度伪彩叠加预览 / 内参+位姿元数据 JSON
  */
-public class CaptureDatasetActivity extends AppCompatActivity implements View.OnClickListener {
+public class CaptureDatasetActivity extends AppCompatActivity {
 
     private static final String TAG = "CaptureDatasetActivity";
     private static final String SAVE_DIR = "Pictures/OrbbecViewer";
+    /** 连拍间隔 ms */
+    private static final long BURST_INTERVAL_MS = 200;
 
     private OBContext mOBContext;
     private Device mDevice;
@@ -69,12 +79,24 @@ public class CaptureDatasetActivity extends AppCompatActivity implements View.On
     private OBGLView mColorView;
     private TextView mStatusText;
     private TextView mCountText;
+    private Button mCaptureBtn;
+    private Button mOverlayBtn;
 
     private volatile boolean mIsRunning;
     private Thread mRenderThread;
 
+    /** 是否在预览上叠加深度伪彩 */
+    private volatile boolean mShowDepthOverlay = false;
+
+    // 连拍控制
+    private volatile boolean mBurstRunning = false;
+    private final Runnable mBurstTick = this::captureOnce;
+
     // 最新一帧对齐数据（回调线程写入，渲染/保存线程读取）
     private volatile FramePair mLatestPair;
+
+    // 相机内参/外参（D2C 对齐后）
+    private volatile CameraParam mCameraParam;
 
     private final ExecutorService mSaveExecutor = Executors.newSingleThreadExecutor();
     private final Handler mMainHandler = new Handler(Looper.getMainLooper());
@@ -101,6 +123,11 @@ public class CaptureDatasetActivity extends AppCompatActivity implements View.On
             this.depthScale = depthScale;
             this.timestamp = timestamp;
         }
+
+        FramePair copy() {
+            return new FramePair(colorW, colorH, colorRgb.clone(),
+                    depthW, depthH, depthData.clone(), depthScale, timestamp);
+        }
     }
 
     @Override
@@ -112,10 +139,60 @@ public class CaptureDatasetActivity extends AppCompatActivity implements View.On
         mColorView = findViewById(R.id.capture_color_view);
         mStatusText = findViewById(R.id.capture_status);
         mCountText = findViewById(R.id.capture_count);
-        Button captureBtn = findViewById(R.id.btn_capture);
-        captureBtn.setOnClickListener(this);
+        mCaptureBtn = findViewById(R.id.btn_capture);
+        mOverlayBtn = findViewById(R.id.btn_overlay);
+
+        setupCaptureButton();
+        setupOverlayButton();
 
         initOBContext();
+    }
+
+    private void setupCaptureButton() {
+        mCaptureBtn.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    mCaptureBtn.setPressed(true);
+                    startBurst();
+                    return true;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    mCaptureBtn.setPressed(false);
+                    stopBurst();
+                    return true;
+            }
+            return false;
+        });
+    }
+
+    private void startBurst() {
+        if (mBurstRunning) return;
+        mBurstRunning = true;
+        captureOnce(); // 立即拍一张
+        scheduleBurst();
+    }
+
+    private void scheduleBurst() {
+        if (mBurstRunning) {
+            mMainHandler.postDelayed(() -> {
+                if (mBurstRunning) {
+                    captureOnce();
+                    scheduleBurst();
+                }
+            }, BURST_INTERVAL_MS);
+        }
+    }
+
+    private void stopBurst() {
+        mBurstRunning = false;
+    }
+
+    private void setupOverlayButton() {
+        mOverlayBtn.setOnClickListener(v -> {
+            mShowDepthOverlay = !mShowDepthOverlay;
+            mOverlayBtn.setText(mShowDepthOverlay ? R.string.capture_overlay_on : R.string.capture_overlay_off);
+            showToast(mShowDepthOverlay ? "已开启深度伪彩叠加" : "已关闭深度伪彩叠加");
+        });
     }
 
     private void initOBContext() {
@@ -224,11 +301,18 @@ public class CaptureDatasetActivity extends AppCompatActivity implements View.On
                 return;
             }
 
+            // 获取 D2C 对齐后的相机内参/外参
+            try {
+                mCameraParam = pipeline.getCameraParam();
+            } catch (Exception e) {
+                Log.w(TAG, "getCameraParam failed: " + e.getMessage());
+            }
+
             mPipeline = pipeline;
             mConfig = config;
             mIsRunning = true;
             startRenderThread();
-            setStatus("已连接，点击拍照采集 RGB-D 数据对");
+            setStatus("已连接：点按拍照，长按连拍，伪彩可叠加");
             Log.i(TAG, "pipeline started, align=" + alignMode);
         } catch (Exception e) {
             Log.e(TAG, "startPipeline error: " + e.getMessage(), e);
@@ -346,8 +430,15 @@ public class CaptureDatasetActivity extends AppCompatActivity implements View.On
                 try {
                     FramePair pair = mLatestPair;
                     if (pair != null) {
+                        byte[] display = pair.colorRgb;
+                        if (mShowDepthOverlay) {
+                            // 拷贝一份避免修改原始数据（保存需要原图）
+                            display = pair.colorRgb.clone();
+                            DepthColorizer.blendDepth(display, pair.depthData, pair.colorW, pair.colorH,
+                                    pair.depthScale, 0.4f);
+                        }
                         mColorView.update(pair.colorW, pair.colorH, StreamType.COLOR,
-                                Format.RGB888, pair.colorRgb, 1.0f);
+                                Format.RGB888, display, 1.0f);
                     }
                     Thread.sleep(66); // ~15fps 预览
                 } catch (InterruptedException e) {
@@ -360,24 +451,15 @@ public class CaptureDatasetActivity extends AppCompatActivity implements View.On
         mRenderThread.start();
     }
 
-    @Override
-    public void onClick(View v) {
-        if (v.getId() == R.id.btn_capture) {
-            capture();
-        }
-    }
-
-    private void capture() {
+    /** 单次采集（连拍会反复调用） */
+    private void captureOnce() {
         FramePair pair = mLatestPair;
         if (pair == null) {
-            showToast("等待画面数据...");
+            if (!mBurstRunning) showToast("等待画面数据...");
             return;
         }
-        // 拷贝一份，避免与回调线程竞争
-        final FramePair snapshot = new FramePair(
-                pair.colorW, pair.colorH, pair.colorRgb.clone(),
-                pair.depthW, pair.depthH, pair.depthData.clone(),
-                pair.depthScale, pair.timestamp);
+        final FramePair snapshot = pair.copy();
+        final CameraParam camParam = mCameraParam;
 
         mSaveExecutor.execute(() -> {
             try {
@@ -385,6 +467,7 @@ public class CaptureDatasetActivity extends AppCompatActivity implements View.On
                         .format(new Date());
                 String rgbName = "rgb_" + ts + ".png";
                 String depthName = "depth_" + ts + ".png";
+                String metaName = "meta_" + ts + ".json";
 
                 // RGB PNG
                 Bitmap bitmap = ImageUtils.createBitmap(snapshot.colorRgb, snapshot.colorW, snapshot.colorH);
@@ -399,16 +482,95 @@ public class CaptureDatasetActivity extends AppCompatActivity implements View.On
                         snapshot.depthData, snapshot.depthW, snapshot.depthH, snapshot.depthScale);
                 saveViaMediaStore(depthName, "image/png", os -> os.write(depthPng));
 
+                // 内参/位姿 JSON
+                String meta = buildMetaJson(ts, rgbName, depthName, snapshot, camParam);
+                saveViaMediaStore(metaName, "application/json",
+                        os -> os.write(meta.getBytes(StandardCharsets.UTF_8)));
+
                 mSavedCount++;
                 mMainHandler.post(() -> {
                     mCountText.setText(getString(R.string.capture_count_fmt, mSavedCount));
-                    showToast("已保存: " + rgbName + " + " + depthName);
+                    if (!mBurstRunning) {
+                        showToast("已保存: " + rgbName);
+                    }
                 });
             } catch (Exception e) {
                 Log.e(TAG, "save failed: " + e.getMessage(), e);
                 mMainHandler.post(() -> showToast("保存失败: " + e.getMessage()));
             }
         });
+    }
+
+    /** 构建相机内参/外参 JSON 元数据 */
+    private String buildMetaJson(String ts, String rgbName, String depthName,
+                                 FramePair pair, CameraParam cam) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\n");
+        sb.append("  \"timestamp\": \"").append(ts).append("\",\n");
+        sb.append("  \"rgb_file\": \"").append(rgbName).append("\",\n");
+        sb.append("  \"depth_file\": \"").append(depthName).append("\",\n");
+        sb.append("  \"depth_unit\": \"mm\",\n");
+        sb.append("  \"depth_scale\": ").append(pair.depthScale).append(",\n");
+        sb.append("  \"width\": ").append(pair.colorW).append(",\n");
+        sb.append("  \"height\": ").append(pair.colorH).append(",\n");
+        if (cam != null) {
+            CameraIntrinsic ci = cam.getColorIntrinsic();
+            if (ci != null) {
+                sb.append("  \"color_intrinsic\": {\n");
+                sb.append("    \"fx\": ").append(ci.getFx()).append(",\n");
+                sb.append("    \"fy\": ").append(ci.getFy()).append(",\n");
+                sb.append("    \"cx\": ").append(ci.getCx()).append(",\n");
+                sb.append("    \"cy\": ").append(ci.getCy()).append(",\n");
+                sb.append("    \"width\": ").append(ci.getWidth()).append(",\n");
+                sb.append("    \"height\": ").append(ci.getHeight()).append("\n");
+                sb.append("  },\n");
+            }
+            CameraIntrinsic di = cam.getDepthIntrinsic();
+            if (di != null) {
+                sb.append("  \"depth_intrinsic\": {\n");
+                sb.append("    \"fx\": ").append(di.getFx()).append(",\n");
+                sb.append("    \"fy\": ").append(di.getFy()).append(",\n");
+                sb.append("    \"cx\": ").append(di.getCx()).append(",\n");
+                sb.append("    \"cy\": ").append(di.getCy()).append(",\n");
+                sb.append("    \"width\": ").append(di.getWidth()).append(",\n");
+                sb.append("    \"height\": ").append(di.getHeight()).append("\n");
+                sb.append("  },\n");
+            }
+            CameraDistortion cd = cam.getColorDistortion();
+            if (cd != null) {
+                sb.append("  \"color_distortion\": [")
+                        .append(cd.getK1()).append(", ").append(cd.getK2()).append(", ")
+                        .append(cd.getP1()).append(", ").append(cd.getP2()).append(", ")
+                        .append(cd.getK3()).append(", ").append(cd.getK4()).append(", ")
+                        .append(cd.getK5()).append(", ").append(cd.getK6()).append("],\n");
+            }
+            D2CTransform tf = cam.getD2CTransform();
+            if (tf != null) {
+                float[] rot = tf.getRot();
+                float[] trans = tf.getTrans();
+                sb.append("  \"d2c_rot\": [");
+                for (int i = 0; i < rot.length; i++) {
+                    sb.append(rot[i]);
+                    if (i < rot.length - 1) sb.append(", ");
+                }
+                sb.append("],\n");
+                sb.append("  \"d2c_trans\": [");
+                for (int i = 0; i < trans.length; i++) {
+                    sb.append(trans[i]);
+                    if (i < trans.length - 1) sb.append(", ");
+                }
+                sb.append("],\n");
+                sb.append("  \"is_mirrored\": ").append(cam.isMirrored()).append(",\n");
+            }
+        }
+        // 去掉最后一个逗号+换行
+        int idx = sb.lastIndexOf(",\n");
+        if (idx == sb.length() - 2) {
+            sb.delete(idx, sb.length());
+            sb.append("\n");
+        }
+        sb.append("}\n");
+        return sb.toString();
     }
 
     private void saveViaMediaStore(String displayName, String mimeType, IOConsumer writer) throws Exception {
@@ -459,6 +621,8 @@ public class CaptureDatasetActivity extends AppCompatActivity implements View.On
     protected void onDestroy() {
         super.onDestroy();
         mIsRunning = false;
+        mBurstRunning = false;
+        mMainHandler.removeCallbacksAndMessages(null);
         if (mRenderThread != null) {
             mRenderThread.interrupt();
             mRenderThread = null;
