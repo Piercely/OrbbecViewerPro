@@ -35,6 +35,8 @@
     <string name="feat_save_desc">Save frames as files</string>
     <string name="feat_hot">Hot Plug</string>
     <string name="feat_hot_desc">Device attach / detach</string>
+    <string name="feat_capture">Dataset Capture</string>
+    <string name="feat_capture_desc">Save aligned RGB-D pairs for training</string>
 
     <!-- ===================== Viewer / capture ===================== -->
     <string name="viewer_color_title">Color Stream</string>
@@ -47,6 +49,8 @@
     <string name="photo_saved">Photo saved to album\n%1$s</string>
     <string name="photo_no_frame">No frame yet, please wait…</string>
     <string name="photo_failed">Failed to save photo</string>
+    <string name="capture_btn">Capture</string>
+    <string name="capture_count_fmt">已采集: %d 组</string>
     <!--
     This string is used for square devices and overridden by hello_world in
     values-round/strings.xml for round devices.

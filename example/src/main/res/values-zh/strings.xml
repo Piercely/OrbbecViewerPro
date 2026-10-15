@@ -35,6 +35,8 @@
     <string name="feat_save_desc">帧数据保存到本地</string>
     <string name="feat_hot">热插拔</string>
     <string name="feat_hot_desc">设备插入与拔出监听</string>
+    <string name="feat_capture">数据集采集</string>
+    <string name="feat_capture_desc">保存对齐的 RGB-D 数据对用于训练</string>
 
     <!-- ===================== 浏览页 / 拍照 ===================== -->
     <string name="viewer_color_title">彩色画面</string>
@@ -47,6 +49,8 @@
     <string name="photo_saved">照片已保存到相册\n%1$s</string>
     <string name="photo_no_frame">暂无画面，请稍候…</string>
     <string name="photo_failed">照片保存失败</string>
+    <string name="capture_btn">拍照采集</string>
+    <string name="capture_count_fmt">已采集: %d 组</string>
     <!--
     This string is used for square devices and overridden by hello_world in
     values-round/strings.xml for round devices.

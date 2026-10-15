@@ -23,6 +23,7 @@
         <activity android:name=".activity.SaveToDiskActivity" />
         <activity android:name=".activity.SensorControlActivity" />
         <activity android:name=".activity.SyncAlignViewerActivity" />
+        <activity android:name=".activity.CaptureDatasetActivity" />
         <activity android:name=".activity.PointCloudActivity" />
         <activity android:name=".activity.HelloOrbbecActivity" />
         <activity

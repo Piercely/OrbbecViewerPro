@@ -72,6 +72,9 @@ public class MainActivity extends AppCompatActivity {
         features.add(new Feature(R.string.feat_align, R.string.feat_align_desc,
                 R.drawable.ic_feat_align, R.color.cat_teal, R.color.cat_teal_bg,
                 SyncAlignViewerActivity.class));
+        features.add(new Feature(R.string.feat_capture, R.string.feat_capture_desc,
+                R.drawable.ic_feat_save, R.color.cat_amber, R.color.cat_amber_bg,
+                CaptureDatasetActivity.class));
         features.add(new Feature(R.string.feat_pointcloud, R.string.feat_pointcloud_desc,
                 R.drawable.ic_feat_pointcloud, R.color.cat_violet, R.color.cat_violet_bg,
                 PointCloudActivity.class));
